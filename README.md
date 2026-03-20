@@ -1,5 +1,7 @@
 # pytest-llm-rubric
 
+> **Experimental** — this plugin is in early development. APIs may change without notice.
+
 Minimal pytest plugin for LLM-as-a-Judge — simple semantic PASS/FAIL checks against text or documents.
 
 ## Why pytest?
