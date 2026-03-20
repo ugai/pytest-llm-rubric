@@ -28,8 +28,8 @@ Not a general essay grader or multi-dimensional scoring system.
 <!--pytest.mark.skip-->
 ```bash
 pip install pytest-llm-rubric  # or: uv add --dev pytest-llm-rubric
-ollama serve                      # start Ollama (if not already running)
-ollama pull granite4:3b           # any chat model works
+ollama serve                   # start Ollama (if not already running)
+ollama pull granite4:3b        # any chat model works
 ```
 
 ### Minimal Test
@@ -171,7 +171,7 @@ Runs calibration against all local Ollama models and recommends the smallest one
 git clone https://github.com/ugai/pytest-llm-rubric.git
 cd pytest-llm-rubric
 uv sync
-uv run pre-commit install  # ruff + ty on every commit
+uv run pre-commit install           # ruff + ty on every commit
 uv run pytest -m "not integration"  # no LLM calls, runs offline
 uv run ruff check src/ tests/
 uv run ruff format src/ tests/
