@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pytest_rubric_grader.plugin import GraderLLM
+    from pytest_llm_rubric.plugin import JudgeLLM
 
 JUDGE_SYSTEM_PROMPT = """\
 You are a rubric grader. You will be given a DOCUMENT and a CRITERION.
@@ -285,11 +285,11 @@ class CalibrationResult:
     details: list[dict]
 
 
-def calibrate(llm: GraderLLM, system_prompt: str | None = None) -> CalibrationResult:
+def calibrate(llm: JudgeLLM, system_prompt: str | None = None) -> CalibrationResult:
     """Run golden tests against the LLM and return results.
 
     Parameters:
-        llm: Any object implementing the GraderLLM protocol.
+        llm: Any object implementing the JudgeLLM protocol.
         system_prompt: Custom system prompt. Defaults to JUDGE_SYSTEM_PROMPT.
     """
     prompt = system_prompt if system_prompt is not None else JUDGE_SYSTEM_PROMPT

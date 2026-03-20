@@ -1,4 +1,4 @@
-"""Tests for pytest-rubric-grader plugin."""
+"""Tests for pytest-llm-rubric plugin."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import os
 
 import pytest
 
-from pytest_rubric_grader.plugin import (
-    OpenAICompatibleGrader,
+from pytest_llm_rubric.plugin import (
+    OpenAICompatibleJudge,
     _discover_anthropic,
     _discover_ollama,
     _discover_openai,
@@ -19,11 +19,11 @@ from pytest_rubric_grader.plugin import (
 
 
 class TestDiscoverOllama:
-    def test_returns_grader_when_running(self):
-        grader = _discover_ollama()
-        if grader is None:
+    def test_returns_judge_when_running(self):
+        judge = _discover_ollama()
+        if judge is None:
             pytest.skip("Ollama is not running")
-        assert isinstance(grader, OpenAICompatibleGrader)
+        assert isinstance(judge, OpenAICompatibleJudge)
 
     def test_returns_none_when_unreachable(self, monkeypatch):
         monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
@@ -31,12 +31,12 @@ class TestDiscoverOllama:
 
     def test_returns_none_when_model_not_found(self, monkeypatch):
         """Requesting a non-existent model should return None, not silently substitute."""
-        monkeypatch.setenv("PYTEST_RUBRIC_GRADER_OLLAMA_MODEL", "nonexistent-model-xyz")
-        grader = _discover_ollama()
-        if grader is not None:
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_OLLAMA_MODEL", "nonexistent-model-xyz")
+        judge = _discover_ollama()
+        if judge is not None:
             # Ollama is not running or has the exact model — skip
             pytest.skip("Ollama not running or model unexpectedly exists")
-        assert grader is None
+        assert judge is None
 
 
 class TestDiscoverAnthropic:
@@ -44,10 +44,10 @@ class TestDiscoverAnthropic:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         assert _discover_anthropic() is None
 
-    def test_returns_grader_with_key(self, monkeypatch):
+    def test_returns_judge_with_key(self, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        grader = _discover_anthropic()
-        assert isinstance(grader, OpenAICompatibleGrader)
+        judge = _discover_anthropic()
+        assert isinstance(judge, OpenAICompatibleJudge)
 
 
 class TestDiscoverOpenAI:
@@ -55,10 +55,10 @@ class TestDiscoverOpenAI:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         assert _discover_openai() is None
 
-    def test_returns_grader_with_key(self, monkeypatch):
+    def test_returns_judge_with_key(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        grader = _discover_openai()
-        assert isinstance(grader, OpenAICompatibleGrader)
+        judge = _discover_openai()
+        assert isinstance(judge, OpenAICompatibleJudge)
 
 
 # ---------------------------------------------------------------------------
@@ -68,14 +68,28 @@ class TestDiscoverOpenAI:
 pytest_plugins = ["pytester"]
 
 
-class TestGraderLLMFixture:
+class TestJudgeLLMFixture:
     def test_skip_when_no_backend(self, pytester, monkeypatch):
-        monkeypatch.setenv("PYTEST_RUBRIC_GRADER_BACKEND", "")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "")
         monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
         pytester.makeconftest("")
         pytester.makepyfile("""
-            def test_uses_grader(grader_llm):
-                assert grader_llm is not None
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(skipped=1)
+
+    def test_default_backend_ignores_api_keys(self, pytester, monkeypatch):
+        """Default (empty) backend must use Ollama only, even when paid API keys are present."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "")
+        monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-should-not-be-used")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-should-not-be-used")
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
         """)
         result = pytester.runpytest_subprocess("-v")
         result.assert_outcomes(skipped=1)
@@ -89,28 +103,28 @@ class TestGraderLLMFixture:
                     return "fake response"
 
             @pytest.fixture
-            def grader_llm():
+            def judge_llm():
                 return FakeLLM()
         """)
         pytester.makepyfile("""
-            def test_uses_fake(grader_llm):
-                result = grader_llm.complete([{"role": "user", "content": "hi"}])
+            def test_uses_fake(judge_llm):
+                result = judge_llm.complete([{"role": "user", "content": "hi"}])
                 assert result == "fake response"
         """)
         result = pytester.runpytest("-v")
         result.assert_outcomes(passed=1)
 
     def test_unknown_backend_skips(self, pytester, monkeypatch):
-        monkeypatch.setenv("PYTEST_RUBRIC_GRADER_BACKEND", "bogus")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "bogus")
         pytester.makeconftest("")
         pytester.makepyfile("""
-            def test_uses_grader(grader_llm):
-                assert grader_llm is not None
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
         """)
         result = pytester.runpytest_subprocess("-v")
         result.assert_outcomes(skipped=1)
 
-    def test_rubric_grading_marker_auto_applied(self, pytester):
+    def test_llm_rubric_marker_auto_applied(self, pytester):
         pytester.makeconftest("""
             import pytest
 
@@ -119,20 +133,20 @@ class TestGraderLLMFixture:
                     return "fake"
 
             @pytest.fixture(scope="session")
-            def grader_llm():
+            def judge_llm():
                 return FakeLLM()
         """)
         pytester.makepyfile("""
-            def test_with_grader(grader_llm):
-                assert grader_llm is not None
+            def test_with_judge(judge_llm):
+                assert judge_llm is not None
 
-            def test_without_grader():
+            def test_without_judge():
                 assert True
         """)
-        result = pytester.runpytest("-v", "-m", "rubric_grading")
+        result = pytester.runpytest("-v", "-m", "llm_rubric")
         result.assert_outcomes(passed=1)
 
-    def test_exclude_rubric_grading_marker(self, pytester):
+    def test_exclude_llm_rubric_marker(self, pytester):
         pytester.makeconftest("""
             import pytest
 
@@ -141,17 +155,17 @@ class TestGraderLLMFixture:
                     return "fake"
 
             @pytest.fixture(scope="session")
-            def grader_llm():
+            def judge_llm():
                 return FakeLLM()
         """)
         pytester.makepyfile("""
-            def test_with_grader(grader_llm):
-                assert grader_llm is not None
+            def test_with_judge(judge_llm):
+                assert judge_llm is not None
 
-            def test_without_grader():
+            def test_without_judge():
                 assert True
         """)
-        result = pytester.runpytest("-v", "-m", "not rubric_grading")
+        result = pytester.runpytest("-v", "-m", "not llm_rubric")
         result.assert_outcomes(passed=1, deselected=1)
 
 
@@ -163,10 +177,10 @@ class TestGraderLLMFixture:
 @pytest.mark.integration
 class TestIntegration:
     def test_ollama_complete(self):
-        grader = _discover_ollama()
-        if grader is None:
+        judge = _discover_ollama()
+        if judge is None:
             pytest.skip("Ollama is not running")
-        response = grader.complete(
+        response = judge.complete(
             [
                 {"role": "user", "content": "Reply with exactly: hello"},
             ]
@@ -176,9 +190,9 @@ class TestIntegration:
     def test_anthropic_complete(self):
         if not os.environ.get("ANTHROPIC_API_KEY"):
             pytest.skip("ANTHROPIC_API_KEY not set")
-        grader = _discover_anthropic()
-        assert grader is not None
-        response = grader.complete(
+        judge = _discover_anthropic()
+        assert judge is not None
+        response = judge.complete(
             [
                 {"role": "user", "content": "Reply with exactly: hello"},
             ]
@@ -188,9 +202,9 @@ class TestIntegration:
     def test_openai_complete(self):
         if not os.environ.get("OPENAI_API_KEY"):
             pytest.skip("OPENAI_API_KEY not set")
-        grader = _discover_openai()
-        assert grader is not None
-        response = grader.complete(
+        judge = _discover_openai()
+        assert judge is not None
+        response = judge.complete(
             [
                 {"role": "user", "content": "Reply with exactly: hello"},
             ]

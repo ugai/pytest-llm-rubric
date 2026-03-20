@@ -484,7 +484,7 @@ wheels = [
 ]
 
 [[package]]
-name = "pytest-rubric-grader"
+name = "pytest-llm-rubric"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

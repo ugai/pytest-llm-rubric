@@ -1,8 +1,8 @@
 """Find the best (smallest passing) Ollama model for rubric grading.
 
 Usage:
-    uv run python -m pytest_rubric_grader.find_model
-    uv run python -m pytest_rubric_grader.find_model --base-url http://host:11434
+    uv run python -m pytest_llm_rubric.find_model
+    uv run python -m pytest_llm_rubric.find_model --base-url http://host:11434
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ import sys
 import httpx
 from openai import OpenAI
 
-from pytest_rubric_grader.calibration import calibrate
-from pytest_rubric_grader.plugin import OpenAICompatibleGrader
+from pytest_llm_rubric.calibration import calibrate
+from pytest_llm_rubric.plugin import OpenAICompatibleJudge
 
 
 def _get_ollama_models(base_url: str) -> list[dict]:
@@ -65,10 +65,10 @@ def find_best_model(base_url: str = "http://localhost:11434") -> None:
         size = _size_label(model.get("size", 0))
         print(f"  {name:<30} ({size:>6}) ... ", end="", flush=True)
 
-        grader = OpenAICompatibleGrader(client, name)
+        judge = OpenAICompatibleJudge(client, name)
 
         try:
-            result = calibrate(grader)
+            result = calibrate(judge)
             status = f"{'PASS' if result.passed else 'FAIL'} ({result.correct}/{result.total})"
             print(status)
             results.append({"name": name, "size": size, "result": result})
@@ -81,7 +81,7 @@ def find_best_model(base_url: str = "http://localhost:11434") -> None:
     if recommended:
         print(f"Recommended: {recommended} (smallest passing model)")
         print("\nSet in defaults.py or environment:")
-        print(f"  PYTEST_RUBRIC_GRADER_MODEL={recommended}")
+        print(f"  PYTEST_LLM_RUBRIC_MODEL={recommended}")
     else:
         print("No model passed calibration.")
         print("Consider pulling a larger model: ollama pull granite4:3b")

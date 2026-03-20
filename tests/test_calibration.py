@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pytest_rubric_grader.calibration import GOLDEN_TESTS, JUDGE_SYSTEM_PROMPT, calibrate
+from pytest_llm_rubric.calibration import GOLDEN_TESTS, JUDGE_SYSTEM_PROMPT, calibrate
 
 
 class FakeLLMPass:

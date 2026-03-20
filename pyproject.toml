@@ -1,5 +1,5 @@
 [project]
-name = "pytest-rubric-grader"
+name = "pytest-llm-rubric"
 version = "0.1.0"
 description = "A pytest plugin for rubric-based LLM-as-judge testing with auto-discovery and calibration"
 readme = "README.md"
@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 [project.entry-points.pytest11]
-rubric_grader = "pytest_rubric_grader.plugin"
+llm_rubric = "pytest_llm_rubric.plugin"
 
 [build-system]
 requires = ["uv_build>=0.10.10,<0.11.0"]
@@ -38,7 +38,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 markers = [
     "integration: tests that require a running LLM backend (Ollama, API keys)",
-    "rubric_grading: tests that use the grader_llm fixture (auto-applied by plugin)",
+    "llm_rubric: tests that use the judge_llm fixture (auto-applied by plugin)",
 ]
 
 [dependency-groups]

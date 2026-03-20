@@ -1,6 +1,6 @@
 """Default models and endpoints for each provider.
 
-Edit these values to change which model is used when PYTEST_RUBRIC_GRADER_MODEL
+Edit these values to change which model is used when PYTEST_LLM_RUBRIC_MODEL
 is not set. Each provider falls back to its default listed here.
 """
 

@@ -1,4 +1,4 @@
-# pytest-rubric-grader
+# pytest-llm-rubric
 
 Pytest plugin for semantic PASS/FAIL checks against text or documents.
 
@@ -8,6 +8,13 @@ Pytest plugin for semantic PASS/FAIL checks against text or documents.
 - Exact string assertions are too brittle
 - Tests need binary semantic judgments: PASS or FAIL
 
+Example use cases:
+- Agent skill regression — verify instruction docs still contain required rules after edits
+- RAG output validation — generated answers include key points from source material
+- Translation fidelity — specific meanings are preserved across languages
+- Chatbot guardrails — outputs that violate prohibited topics receive FAIL
+- Doc generation CI — auto-generated docs include all required sections
+
 Not a general essay grader or multi-dimensional scoring system.
 
 ## Quick Start
@@ -15,7 +22,7 @@ Not a general essay grader or multi-dimensional scoring system.
 ### Prerequisites
 
 ```bash
-pip install pytest-rubric-grader   # or: uv add --dev pytest-rubric-grader
+pip install pytest-llm-rubric   # or: uv add --dev pytest-llm-rubric
 ollama serve                       # start Ollama (if not already running)
 ollama pull granite4:3b            # any chat model works
 ```
@@ -23,11 +30,14 @@ ollama pull granite4:3b            # any chat model works
 ### Minimal Test
 
 ```python
-def test_mentions_deadline(grader_llm):
+def test_mentions_deadline(judge_llm):
+    # In practice, text is usually much longer —
+    # policy docs, generated reports, LLM outputs, etc.
     text = "The report is due by March 31st."
-    response = grader_llm.complete([
+    criterion = "The delivery deadline is mentioned."
+    response = judge_llm.complete([
         {"role": "system", "content": "Does this text express the criterion? Reply PASS or FAIL."},
-        {"role": "user", "content": f"TEXT:\n{text}\n\nCRITERION:\nThe delivery deadline is mentioned."},
+        {"role": "user", "content": f"TEXT:\n{text}\n\nCRITERION:\n{criterion}"},
     ])
     assert "PASS" in response.upper()
 ```
@@ -36,7 +46,7 @@ def test_mentions_deadline(grader_llm):
 
 1. **Discover** — find an available LLM backend (local Ollama by default)
 2. **Calibrate** — run 12 golden tests to verify reliable PASS/FAIL judgment
-3. **Provide** — expose the `grader_llm` session fixture on success
+3. **Provide** — expose the `judge_llm` session fixture on success
 4. **Skip** — skip dependent tests on backend absence or calibration failure (not fail)
 
 By default, only local Ollama is tried. Paid cloud APIs require explicit opt-in.
@@ -58,9 +68,9 @@ REQUIRED_RULES = [
 
 @pytest.mark.parametrize("doc", [p.name for p in DOCS_DIR.glob("*.md")])
 @pytest.mark.parametrize("rule", REQUIRED_RULES)
-def test_policy_expresses_rule(grader_llm, doc, rule):
+def test_policy_expresses_rule(judge_llm, doc, rule):
     text = (DOCS_DIR / doc).read_text()
-    response = grader_llm.complete([
+    response = judge_llm.complete([
         {"role": "system", "content": "Does this document express the criterion? Reply PASS or FAIL."},
         {"role": "user", "content": f"DOCUMENT:\n{text}\n\nCRITERION:\n{rule}"},
     ])
@@ -71,15 +81,15 @@ def test_policy_expresses_rule(grader_llm, doc, rule):
 
 | Variable | Values | Default |
 |---|---|---|
-| `PYTEST_RUBRIC_GRADER_BACKEND` | `ollama`, `anthropic`, `openai`, `auto`, (empty) | (empty) = Ollama only |
-| `PYTEST_RUBRIC_GRADER_MODEL` | Any model name | Provider-specific default |
-| `PYTEST_RUBRIC_GRADER_OLLAMA_MODEL` | Ollama model name | `granite4:3b` |
-| `PYTEST_RUBRIC_GRADER_ANTHROPIC_MODEL` | Anthropic model name | `claude-haiku-4-5` |
-| `PYTEST_RUBRIC_GRADER_OPENAI_MODEL` | OpenAI model name | `gpt-5.4-nano` |
-| `PYTEST_RUBRIC_GRADER_ANTHROPIC_BASE_URL` | Anthropic endpoint URL | `https://api.anthropic.com/v1` |
-| `PYTEST_RUBRIC_GRADER_SKIP_CALIBRATION` | `1`, `true`, `yes` | (disabled) |
+| `PYTEST_LLM_RUBRIC_BACKEND` | `ollama`, `anthropic`, `openai`, `auto`, (empty) | (empty) = Ollama only |
+| `PYTEST_LLM_RUBRIC_MODEL` | Any model name | Provider-specific default |
+| `PYTEST_LLM_RUBRIC_OLLAMA_MODEL` | Ollama model name | `granite4:3b` |
+| `PYTEST_LLM_RUBRIC_ANTHROPIC_MODEL` | Anthropic model name | `claude-haiku-4-5` |
+| `PYTEST_LLM_RUBRIC_OPENAI_MODEL` | OpenAI model name | `gpt-5.4-nano` |
+| `PYTEST_LLM_RUBRIC_ANTHROPIC_BASE_URL` | Anthropic endpoint URL | `https://api.anthropic.com/v1` |
+| `PYTEST_LLM_RUBRIC_SKIP_CALIBRATION` | `1`, `true`, `yes` | (disabled) |
 
-Model resolution: provider-specific env var > `PYTEST_RUBRIC_GRADER_MODEL` > default in `defaults.py`.
+Model resolution: provider-specific env var > `PYTEST_LLM_RUBRIC_MODEL` > default in `defaults.py`.
 
 ### Backend Behavior
 
@@ -89,21 +99,21 @@ Model resolution: provider-specific env var > `PYTEST_RUBRIC_GRADER_MODEL` > def
 
 ### CI
 
-Set `PYTEST_RUBRIC_GRADER_BACKEND` and the matching provider credentials in your CI secrets.
+Set `PYTEST_LLM_RUBRIC_BACKEND` and the matching provider credentials in your CI secrets.
 
 ```yaml
 env:
-  PYTEST_RUBRIC_GRADER_BACKEND: openai   # or: anthropic
+  PYTEST_LLM_RUBRIC_BACKEND: openai   # or: anthropic
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
 ## Markers
 
-Tests that use the `grader_llm` fixture automatically receive the `rubric_grading` marker.
+Tests that use the `judge_llm` fixture automatically receive the `llm_rubric` marker.
 
 ```bash
-pytest -m "not rubric_grading"   # run everything except LLM-graded tests
-pytest -m rubric_grading         # run only LLM-graded tests
+pytest -m "not llm_rubric"   # run everything except LLM-judged tests
+pytest -m llm_rubric         # run only LLM-judged tests
 ```
 
 ## Custom Backend
@@ -119,7 +129,7 @@ class MyBackend:
         return "PASS"
 
 @pytest.fixture(scope="session")
-def grader_llm():
+def judge_llm():
     return MyBackend()
 ```
 
@@ -128,7 +138,7 @@ def grader_llm():
 Pass a custom system prompt to `calibrate()` for calibration with your own instructions.
 
 ```python
-from pytest_rubric_grader.calibration import calibrate, JUDGE_SYSTEM_PROMPT
+from pytest_llm_rubric.calibration import calibrate, JUDGE_SYSTEM_PROMPT
 
 result = calibrate(llm, system_prompt="Your custom prompt here.")
 ```
@@ -138,7 +148,7 @@ The default `JUDGE_SYSTEM_PROMPT` is used when `system_prompt` is omitted.
 ## Find Best Ollama Model
 
 ```bash
-uv run python -m pytest_rubric_grader.find_model
+uv run python -m pytest_llm_rubric.find_model
 ```
 
 Runs calibration against all local Ollama models and recommends the smallest one that passes.
@@ -146,8 +156,8 @@ Runs calibration against all local Ollama models and recommends the smallest one
 ## Development
 
 ```bash
-git clone https://github.com/ugai/pytest-rubric-grader.git
-cd pytest-rubric-grader
+git clone https://github.com/ugai/pytest-llm-rubric.git
+cd pytest-llm-rubric
 uv sync
 uv run pre-commit install   # ruff + ty on every commit
 uv run pytest -m "not integration"
@@ -155,6 +165,13 @@ uv run ruff check src/ tests/
 uv run ruff format src/ tests/
 uv run ty check src/
 ```
+
+## References
+
+This plugin's design — decomposing evaluation into multiple binary PASS/FAIL criteria instead of multi-level scoring — aligns with Anthropic's recommended practices:
+
+- **[Define success criteria and build evaluations](https://docs.anthropic.com/en/docs/test-and-evaluate/develop-tests)** — LLM-based grading section recommends binary classification (`"correct"` / `"incorrect"`) with clear rubrics over qualitative scales.
+- **[Skill authoring best practices](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills/best-practices)** — Evaluation-driven development section structures `expected_behavior` as an array of individually verifiable statements, not a single aggregate score.
 
 ## License
 
