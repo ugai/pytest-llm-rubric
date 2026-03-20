@@ -1,0 +1,49 @@
+[project]
+name = "pytest-rubric-grader"
+version = "0.1.0"
+description = "A pytest plugin for rubric-based LLM-as-judge testing with auto-discovery and calibration"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "ugai", email = "ugai.sub1@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "pytest>=8",
+    "openai>=1",
+]
+classifiers = [
+    "Framework :: Pytest",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.entry-points.pytest11]
+rubric_grader = "pytest_rubric_grader.plugin"
+
+[build-system]
+requires = ["uv_build>=0.10.10,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that require a running LLM backend (Ollama, API keys)",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.5.1",
+    "pytest>=8",
+    "ruff>=0.15.7",
+    "ty>=0.0.24",
+]
