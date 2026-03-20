@@ -14,7 +14,7 @@ uv run ruff check src/ tests/            # Lint
 uv run ruff check --fix src/ tests/      # Lint with auto-fix
 uv run ruff format src/ tests/           # Format
 uv run ty check src/                     # Type check (required — py.typed marker is present)
-uv run python -m pytest_llm_rubric.find_model  # Find best Ollama model
+uv run python -m pytest_llm_rubric.find_local_model  # Find best local model
 ```
 
 ## Architecture
@@ -29,7 +29,7 @@ This is a pytest plugin (`pytest11` entry point) that provides `judge_llm`, a se
 
 - **`defaults.py`** — Single file for default model names and endpoints per provider. Intended to be human-editable.
 
-- **`find_model.py`** — CLI tool that runs calibration against all Ollama models and recommends the smallest passing one.
+- **`find_local_model.py`** — CLI tool that runs calibration against all local models (currently Ollama) and recommends the smallest passing one.
 
 **Backend discovery order** is controlled by `PYTEST_LLM_RUBRIC_BACKEND`:
 - Empty (default): Ollama only — safe, no API costs

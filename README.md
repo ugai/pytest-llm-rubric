@@ -1,6 +1,10 @@
 # pytest-llm-rubric
 
-Pytest plugin for semantic PASS/FAIL checks against text or documents.
+Minimal pytest plugin for LLM-as-a-Judge — simple semantic PASS/FAIL checks against text or documents.
+
+## Why pytest?
+
+Your CI already runs pytest. LLM evaluation shouldn't need a separate framework. Just another test file.
 
 ## Use When
 
@@ -8,12 +12,12 @@ Pytest plugin for semantic PASS/FAIL checks against text or documents.
 - Exact string assertions are too brittle
 - Tests need binary semantic judgments: PASS or FAIL
 
-Example use cases:
-- Agent skill regression — verify instruction docs still contain required rules after edits
-- RAG output validation — generated answers include key points from source material
-- Translation fidelity — specific meanings are preserved across languages
-- Chatbot guardrails — outputs that violate prohibited topics receive FAIL
+e.g.
+
+- Agent skill regression — instruction docs still contain required rules after edits
+- Prompt regression — LLM output quality hasn't degraded after prompt changes
 - Doc generation CI — auto-generated docs include all required sections
+- Translation fidelity — specific meanings are preserved across languages
 
 Not a general essay grader or multi-dimensional scoring system.
 
@@ -23,9 +27,9 @@ Not a general essay grader or multi-dimensional scoring system.
 
 <!--pytest.mark.skip-->
 ```bash
-pip install pytest-llm-rubric   # or: uv add --dev pytest-llm-rubric
-ollama serve                       # start Ollama (if not already running)
-ollama pull granite4:3b            # any chat model works
+pip install pytest-llm-rubric  # or: uv add --dev pytest-llm-rubric
+ollama serve                      # start Ollama (if not already running)
+ollama pull granite4:3b           # any chat model works
 ```
 
 ### Minimal Test
@@ -46,7 +50,7 @@ def test_mentions_deadline(judge_llm):
 ## Execution Flow
 
 1. **Discover** — find an available LLM backend (local Ollama by default)
-2. **Calibrate** — run 12 golden tests to verify reliable PASS/FAIL judgment
+2. **Calibrate** — run 12 golden tests to verify reliable PASS/FAIL judgment (skippable)
 3. **Provide** — expose the `judge_llm` session fixture on success
 4. **Skip** — skip dependent tests on backend absence or calibration failure (not fail)
 
@@ -59,18 +63,20 @@ Verify that each policy document semantically expresses required rules.
 ```python
 import pytest
 from pathlib import Path
+from pytest_llm_rubric import JudgeLLM
 
 DOCS_DIR = Path("policies")
+POLICY_DOCS = sorted(DOCS_DIR.rglob("*.md"))
 REQUIRED_RULES = [
     "Personal data must be encrypted at rest",
     "Access logs are retained for at least 90 days",
     "Third-party integrations require security review",
 ]
 
-@pytest.mark.parametrize("doc", [p.name for p in DOCS_DIR.glob("*.md")])
+@pytest.mark.parametrize("doc", POLICY_DOCS)
 @pytest.mark.parametrize("rule", REQUIRED_RULES)
-def test_policy_expresses_rule(judge_llm, doc, rule):
-    text = (DOCS_DIR / doc).read_text()
+def test_policy_expresses_rule(judge_llm: JudgeLLM, doc, rule):
+    text = doc.read_text()
     response = judge_llm.complete([
         {"role": "system", "content": "Does this document express the criterion? Reply PASS or FAIL."},
         {"role": "user", "content": f"DOCUMENT:\n{text}\n\nCRITERION:\n{rule}"},
@@ -80,23 +86,24 @@ def test_policy_expresses_rule(judge_llm, doc, rule):
 
 ## Configuration
 
-| Variable | Values | Default |
-|---|---|---|
-| `PYTEST_LLM_RUBRIC_BACKEND` | `ollama`, `anthropic`, `openai`, `auto`, (empty) | (empty) = Ollama only |
-| `PYTEST_LLM_RUBRIC_MODEL` | Any model name | Provider-specific default |
-| `PYTEST_LLM_RUBRIC_OLLAMA_MODEL` | Ollama model name | `granite4:3b` |
-| `PYTEST_LLM_RUBRIC_ANTHROPIC_MODEL` | Anthropic model name | `claude-haiku-4-5` |
-| `PYTEST_LLM_RUBRIC_OPENAI_MODEL` | OpenAI model name | `gpt-5.4-nano` |
-| `PYTEST_LLM_RUBRIC_ANTHROPIC_BASE_URL` | Anthropic endpoint URL | `https://api.anthropic.com/v1` |
-| `PYTEST_LLM_RUBRIC_SKIP_CALIBRATION` | `1`, `true`, `yes` | (disabled) |
+| Variable | Default |
+|---|---|
+| `PYTEST_LLM_RUBRIC_BACKEND` | (empty) = Ollama only. `ollama`, `anthropic`, `openai`, `auto` |
+| `PYTEST_LLM_RUBRIC_MODEL` | Provider-specific default |
+| `PYTEST_LLM_RUBRIC_<PROVIDER>_MODEL` | Overrides `MODEL` per provider |
+| `PYTEST_LLM_RUBRIC_SKIP_CALIBRATION` | (disabled) |
 
-Model resolution: provider-specific env var > `PYTEST_LLM_RUBRIC_MODEL` > default in `defaults.py`.
+Model resolution: `<PROVIDER>_MODEL` > `MODEL` > default in `defaults.py`.
+
+Default models: `ollama` → `granite4:3b`, `anthropic` → `claude-haiku-4-5`, `openai` → `gpt-5.4-nano`
 
 ### Backend Behavior
 
 - **(empty)** — Ollama only. Safe default, no API costs.
 - **`auto`** — Ollama → Anthropic → OpenAI (first available)
 - **`ollama`** / **`anthropic`** / **`openai`** — use only the specified backend
+
+If no backend is available or calibration fails, dependent tests are skipped (not failed).
 
 ### CI
 
@@ -105,7 +112,7 @@ Set `PYTEST_LLM_RUBRIC_BACKEND` and the matching provider credentials in your CI
 <!--pytest.mark.skip-->
 ```yaml
 env:
-  PYTEST_LLM_RUBRIC_BACKEND: openai   # or: anthropic
+  PYTEST_LLM_RUBRIC_BACKEND: openai  # or: anthropic
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
@@ -115,8 +122,8 @@ Tests that use the `judge_llm` fixture automatically receive the `llm_rubric` ma
 
 <!--pytest.mark.skip-->
 ```bash
-pytest -m "not llm_rubric"   # run everything except LLM-judged tests
-pytest -m llm_rubric         # run only LLM-judged tests
+pytest -m "not llm_rubric"  # run everything except LLM-judged tests
+pytest -m llm_rubric        # run only LLM-judged tests
 ```
 
 ## Custom Backend
@@ -128,8 +135,9 @@ import pytest
 
 class MyBackend:
     def complete(self, messages, max_tokens=256):
-        # Your LLM call here
-        return "PASS"
+        # Call your internal LLM gateway
+        resp = requests.post("https://internal-llm.corp/v1/chat", json={"messages": messages})
+        return resp.json()["content"]
 
 @pytest.fixture(scope="session")
 def judge_llm():
@@ -138,7 +146,7 @@ def judge_llm():
 
 ## Custom System Prompt
 
-Pass a custom system prompt to `calibrate()` for calibration with your own instructions.
+Tweak the calibration system prompt if your model needs specific instructions to pass calibration.
 
 <!--pytest.mark.skip-->
 ```python
@@ -149,11 +157,11 @@ result = calibrate(llm, system_prompt="Your custom prompt here.")
 
 The default `JUDGE_SYSTEM_PROMPT` is used when `system_prompt` is omitted.
 
-## Find Best Ollama Model
+## Find Best Local Model
 
 <!--pytest.mark.skip-->
 ```bash
-uv run python -m pytest_llm_rubric.find_model
+uv run python -m pytest_llm_rubric.find_local_model
 ```
 
 Runs calibration against all local Ollama models and recommends the smallest one that passes.
@@ -165,8 +173,8 @@ Runs calibration against all local Ollama models and recommends the smallest one
 git clone https://github.com/ugai/pytest-llm-rubric.git
 cd pytest-llm-rubric
 uv sync
-uv run pre-commit install   # ruff + ty on every commit
-uv run pytest -m "not integration"
+uv run pre-commit install  # ruff + ty on every commit
+uv run pytest -m "not integration"  # no LLM calls, runs offline
 uv run ruff check src/ tests/
 uv run ruff format src/ tests/
 uv run ty check src/

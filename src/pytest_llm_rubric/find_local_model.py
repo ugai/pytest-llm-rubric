@@ -1,8 +1,8 @@
-"""Find the best (smallest passing) Ollama model for rubric grading.
+"""Find the best (smallest passing) local model for rubric grading.
 
 Usage:
-    uv run python -m pytest_llm_rubric.find_model
-    uv run python -m pytest_llm_rubric.find_model --base-url http://host:11434
+    uv run python -m pytest_llm_rubric.find_local_model
+    uv run python -m pytest_llm_rubric.find_local_model --base-url http://host:11434
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def _size_label(size_bytes: int) -> str:
     return f"{mb:.0f}MB"
 
 
-def find_best_model(base_url: str = OLLAMA_BASE_URL) -> None:
+def find_best_local_model(base_url: str = OLLAMA_BASE_URL) -> None:
     try:
         models = _get_ollama_models(base_url)
     except Exception as e:
@@ -89,11 +89,11 @@ def find_best_model(base_url: str = OLLAMA_BASE_URL) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Find the best Ollama model for rubric grading")
+    parser = argparse.ArgumentParser(description="Find the best local model for rubric grading")
     parser.add_argument(
         "--base-url",
         default=os.environ.get("OLLAMA_HOST", OLLAMA_BASE_URL),
         help=f"Ollama base URL (default: $OLLAMA_HOST or {OLLAMA_BASE_URL})",
     )
     args = parser.parse_args()
-    find_best_model(args.base_url)
+    find_best_local_model(args.base_url)
