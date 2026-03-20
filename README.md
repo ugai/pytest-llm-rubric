@@ -21,6 +21,7 @@ Not a general essay grader or multi-dimensional scoring system.
 
 ### Prerequisites
 
+<!--pytest.mark.skip-->
 ```bash
 pip install pytest-llm-rubric   # or: uv add --dev pytest-llm-rubric
 ollama serve                       # start Ollama (if not already running)
@@ -101,6 +102,7 @@ Model resolution: provider-specific env var > `PYTEST_LLM_RUBRIC_MODEL` > defaul
 
 Set `PYTEST_LLM_RUBRIC_BACKEND` and the matching provider credentials in your CI secrets.
 
+<!--pytest.mark.skip-->
 ```yaml
 env:
   PYTEST_LLM_RUBRIC_BACKEND: openai   # or: anthropic
@@ -111,6 +113,7 @@ env:
 
 Tests that use the `judge_llm` fixture automatically receive the `llm_rubric` marker.
 
+<!--pytest.mark.skip-->
 ```bash
 pytest -m "not llm_rubric"   # run everything except LLM-judged tests
 pytest -m llm_rubric         # run only LLM-judged tests
@@ -137,6 +140,7 @@ def judge_llm():
 
 Pass a custom system prompt to `calibrate()` for calibration with your own instructions.
 
+<!--pytest.mark.skip-->
 ```python
 from pytest_llm_rubric.calibration import calibrate, JUDGE_SYSTEM_PROMPT
 
@@ -147,6 +151,7 @@ The default `JUDGE_SYSTEM_PROMPT` is used when `system_prompt` is omitted.
 
 ## Find Best Ollama Model
 
+<!--pytest.mark.skip-->
 ```bash
 uv run python -m pytest_llm_rubric.find_model
 ```
@@ -155,6 +160,7 @@ Runs calibration against all local Ollama models and recommends the smallest one
 
 ## Development
 
+<!--pytest.mark.skip-->
 ```bash
 git clone https://github.com/ugai/pytest-llm-rubric.git
 cd pytest-llm-rubric

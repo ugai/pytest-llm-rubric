@@ -45,6 +45,7 @@ markers = [
 dev = [
     "pre-commit>=4.5.1",
     "pytest>=8",
+    "pytest-codeblocks>=0.17.0",
     "ruff>=0.15.7",
     "ty>=0.0.24",
 ]

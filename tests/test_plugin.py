@@ -115,7 +115,7 @@ class TestJudgeLLMFixture:
                 result = judge_llm.complete([{"role": "user", "content": "hi"}])
                 assert result == "fake"
         """)
-        result = pytester.runpytest("-v")
+        result = pytester.runpytest_subprocess("-v")
         result.assert_outcomes(passed=1)
 
     def test_unknown_backend_skips(self, pytester, monkeypatch):
@@ -137,7 +137,7 @@ class TestJudgeLLMFixture:
             def test_without_judge():
                 assert True
         """)
-        result = pytester.runpytest("-v", "-m", "llm_rubric")
+        result = pytester.runpytest_subprocess("-v", "-m", "llm_rubric")
         result.assert_outcomes(passed=1)
 
     def test_exclude_llm_rubric_marker(self, pytester):
@@ -149,7 +149,7 @@ class TestJudgeLLMFixture:
             def test_without_judge():
                 assert True
         """)
-        result = pytester.runpytest("-v", "-m", "not llm_rubric")
+        result = pytester.runpytest_subprocess("-v", "-m", "not llm_rubric")
         result.assert_outcomes(passed=1, deselected=1)
 
 
