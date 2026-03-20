@@ -1,5 +1,8 @@
 # pytest-llm-rubric
 
+[![CI](https://github.com/ugai/pytest-llm-rubric/actions/workflows/ci.yml/badge.svg)](https://github.com/ugai/pytest-llm-rubric/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/pytest-llm-rubric)](https://pypi.org/project/pytest-llm-rubric/)
+
 > **Experimental** — this plugin is in early development. APIs may change without notice.
 
 Minimal pytest plugin for LLM-as-a-Judge — simple semantic PASS/FAIL checks against text or documents.
