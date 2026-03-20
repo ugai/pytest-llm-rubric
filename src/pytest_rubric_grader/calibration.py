@@ -285,14 +285,20 @@ class CalibrationResult:
     details: list[dict]
 
 
-def calibrate(llm: GraderLLM) -> CalibrationResult:
-    """Run golden tests against the LLM and return results."""
+def calibrate(llm: GraderLLM, system_prompt: str | None = None) -> CalibrationResult:
+    """Run golden tests against the LLM and return results.
+
+    Parameters:
+        llm: Any object implementing the GraderLLM protocol.
+        system_prompt: Custom system prompt. Defaults to JUDGE_SYSTEM_PROMPT.
+    """
+    prompt = system_prompt if system_prompt is not None else JUDGE_SYSTEM_PROMPT
     details = []
     correct = 0
 
     for test in GOLDEN_TESTS:
         messages = [
-            {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+            {"role": "system", "content": prompt},
             {
                 "role": "user",
                 "content": (f"DOCUMENT:\n{test['document']}\n\nCRITERION:\n{test['criterion']}"),
@@ -300,10 +306,9 @@ def calibrate(llm: GraderLLM) -> CalibrationResult:
         ]
         try:
             response = llm.complete(messages, max_tokens=16).strip().upper()
-            # Accept responses that start with PASS or FAIL
-            if response.startswith("PASS"):
+            if response == "PASS":
                 verdict = "PASS"
-            elif response.startswith("FAIL"):
+            elif response == "FAIL":
                 verdict = "FAIL"
             else:
                 verdict = f"INVALID: {response[:50]}"

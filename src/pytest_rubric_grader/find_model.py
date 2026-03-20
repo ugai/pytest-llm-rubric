@@ -48,19 +48,23 @@ def find_best_model(base_url: str = "http://localhost:11434") -> None:
 
     # Filter out non-generative models
     skip_patterns = ("embed", "vision", "clip", "whisper")
+    all_count = len(models)
     models = [m for m in models if not any(p in m["name"].lower() for p in skip_patterns)]
+    skipped = all_count - len(models)
+    if skipped:
+        print(f"Skipped {skipped} non-generative model(s) (embedding/vision/etc.).")
 
     print(f"Found {len(models)} model(s) in Ollama. Running calibration...\n")
 
     results = []
     recommended = None
+    client = OpenAI(base_url=f"{base_url}/v1", api_key="ollama", timeout=120.0)
 
     for model in models:
         name = model["name"]
         size = _size_label(model.get("size", 0))
         print(f"  {name:<30} ({size:>6}) ... ", end="", flush=True)
 
-        client = OpenAI(base_url=f"{base_url}/v1", api_key="ollama")
         grader = OpenAICompatibleGrader(client, name)
 
         try:

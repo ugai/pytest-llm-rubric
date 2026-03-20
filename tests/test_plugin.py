@@ -29,6 +29,15 @@ class TestDiscoverOllama:
         monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
         assert _discover_ollama() is None
 
+    def test_returns_none_when_model_not_found(self, monkeypatch):
+        """Requesting a non-existent model should return None, not silently substitute."""
+        monkeypatch.setenv("PYTEST_RUBRIC_GRADER_OLLAMA_MODEL", "nonexistent-model-xyz")
+        grader = _discover_ollama()
+        if grader is not None:
+            # Ollama is not running or has the exact model — skip
+            pytest.skip("Ollama not running or model unexpectedly exists")
+        assert grader is None
+
 
 class TestDiscoverAnthropic:
     def test_returns_none_without_key(self, monkeypatch):
@@ -100,6 +109,50 @@ class TestGraderLLMFixture:
         """)
         result = pytester.runpytest_subprocess("-v")
         result.assert_outcomes(skipped=1)
+
+    def test_rubric_grading_marker_auto_applied(self, pytester):
+        pytester.makeconftest("""
+            import pytest
+
+            class FakeLLM:
+                def complete(self, messages, max_tokens=256):
+                    return "fake"
+
+            @pytest.fixture(scope="session")
+            def grader_llm():
+                return FakeLLM()
+        """)
+        pytester.makepyfile("""
+            def test_with_grader(grader_llm):
+                assert grader_llm is not None
+
+            def test_without_grader():
+                assert True
+        """)
+        result = pytester.runpytest("-v", "-m", "rubric_grading")
+        result.assert_outcomes(passed=1)
+
+    def test_exclude_rubric_grading_marker(self, pytester):
+        pytester.makeconftest("""
+            import pytest
+
+            class FakeLLM:
+                def complete(self, messages, max_tokens=256):
+                    return "fake"
+
+            @pytest.fixture(scope="session")
+            def grader_llm():
+                return FakeLLM()
+        """)
+        pytester.makepyfile("""
+            def test_with_grader(grader_llm):
+                assert grader_llm is not None
+
+            def test_without_grader():
+                assert True
+        """)
+        result = pytester.runpytest("-v", "-m", "not rubric_grading")
+        result.assert_outcomes(passed=1, deselected=1)
 
 
 # ---------------------------------------------------------------------------

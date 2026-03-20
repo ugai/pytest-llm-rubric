@@ -56,7 +56,7 @@ def _discover_ollama() -> OpenAICompatibleGrader | None:
 
     base_url = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
     try:
-        resp = httpx.get(f"{base_url}/api/tags", timeout=2)
+        resp = httpx.get(f"{base_url}/api/tags", timeout=5)
         resp.raise_for_status()
         models = resp.json().get("models", [])
         if not models:
@@ -68,13 +68,13 @@ def _discover_ollama() -> OpenAICompatibleGrader | None:
         elif requested and requested not in available:
             warnings.warn(
                 f"Requested Ollama model {requested!r} not found. "
-                f"Available: {', '.join(sorted(available))}. Using first available.",
+                f"Available: {', '.join(sorted(available))}.",
                 stacklevel=2,
             )
-            model_name = models[0]["name"]
+            return None
         else:
             model_name = models[0]["name"]
-        client = OpenAI(base_url=f"{base_url}/v1", api_key="ollama")
+        client = OpenAI(base_url=f"{base_url}/v1", api_key="ollama", timeout=120.0)
         return OpenAICompatibleGrader(client, model_name)
     except Exception:
         return None
@@ -86,7 +86,8 @@ def _discover_anthropic() -> OpenAICompatibleGrader | None:
     if not api_key:
         return None
     model = _resolve_model("PYTEST_RUBRIC_GRADER_ANTHROPIC_MODEL", ANTHROPIC_MODEL)
-    client = OpenAI(base_url=ANTHROPIC_BASE_URL, api_key=api_key)
+    base_url = os.environ.get("PYTEST_RUBRIC_GRADER_ANTHROPIC_BASE_URL", ANTHROPIC_BASE_URL)
+    client = OpenAI(base_url=base_url, api_key=api_key, timeout=30.0)
     return OpenAICompatibleGrader(client, model)
 
 
@@ -96,7 +97,7 @@ def _discover_openai() -> OpenAICompatibleGrader | None:
     if not api_key:
         return None
     model = _resolve_model("PYTEST_RUBRIC_GRADER_OPENAI_MODEL", OPENAI_MODEL)
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, timeout=30.0)
     return OpenAICompatibleGrader(client, model)
 
 
@@ -172,3 +173,18 @@ def grader_llm() -> GraderLLM:
     """
     grader = _default_grader_llm()
     return _calibrate_or_skip(grader)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "rubric_grading: tests that use the grader_llm fixture (auto-applied)",
+    )
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Auto-apply the rubric_grading marker to tests that use grader_llm."""
+    marker = pytest.mark.rubric_grading
+    for item in items:
+        if "grader_llm" in getattr(item, "fixturenames", ()):
+            item.add_marker(marker)
