@@ -19,3 +19,9 @@ repos:
         language: system
         pass_filenames: false
         files: '\.py$'
+      - id: pytest
+        name: pytest (unit)
+        entry: uv run python -m pytest -m "not integration" -q
+        language: system
+        pass_filenames: false
+        files: '\.py$'
