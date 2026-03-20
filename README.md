@@ -4,7 +4,7 @@ Minimal pytest plugin for LLM-as-a-Judge — simple semantic PASS/FAIL checks ag
 
 ## Why pytest?
 
-Your CI already runs pytest. LLM evaluation shouldn't need a separate framework. Just another test file.
+Your CI already runs pytest. Semantic text checks shouldn't need a separate framework. Just another test file.
 
 ## Use When
 
@@ -93,9 +93,7 @@ def test_policy_expresses_rule(judge_llm: JudgeLLM, doc, rule):
 | `PYTEST_LLM_RUBRIC_<PROVIDER>_MODEL` | Overrides `MODEL` per provider |
 | `PYTEST_LLM_RUBRIC_SKIP_CALIBRATION` | (disabled) |
 
-Model resolution: `<PROVIDER>_MODEL` > `MODEL` > default in `defaults.py`.
-
-Default models: `ollama` → `granite4:3b`, `anthropic` → `claude-haiku-4-5`, `openai` → `gpt-5.4-nano`
+Model resolution: `<PROVIDER>_MODEL` > `MODEL` > default in [`defaults.py`](src/pytest_llm_rubric/defaults.py).
 
 ### Backend Behavior
 
