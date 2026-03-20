@@ -14,6 +14,7 @@ from pytest_llm_rubric.calibration import calibrate
 from pytest_llm_rubric.defaults import (
     ANTHROPIC_BASE_URL,
     ANTHROPIC_MODEL,
+    OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OPENAI_MODEL,
 )
@@ -54,7 +55,7 @@ def _discover_ollama() -> OpenAICompatibleJudge | None:
     """Try to connect to a local Ollama instance."""
     import httpx
 
-    base_url = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    base_url = os.environ.get("OLLAMA_HOST", OLLAMA_BASE_URL)
     try:
         resp = httpx.get(f"{base_url}/api/tags", timeout=5)
         resp.raise_for_status()
@@ -114,35 +115,26 @@ def _default_judge_llm() -> JudgeLLM:
     backend = os.environ.get(ENV_BACKEND, "").lower()
 
     if backend == "openai":
-        judge = _discover_openai()
-        if judge is not None:
+        if (judge := _discover_openai()) is not None:
             return judge
         pytest.skip("PYTEST_LLM_RUBRIC_BACKEND=openai but OPENAI_API_KEY is not set.")
 
     elif backend == "anthropic":
-        judge = _discover_anthropic()
-        if judge is not None:
+        if (judge := _discover_anthropic()) is not None:
             return judge
         pytest.skip("PYTEST_LLM_RUBRIC_BACKEND=anthropic but ANTHROPIC_API_KEY is not set.")
 
     elif backend == "ollama" or backend == "":
-        judge = _discover_ollama()
-        if judge is not None:
+        if (judge := _discover_ollama()) is not None:
             return judge
         if backend == "ollama":
             pytest.skip("PYTEST_LLM_RUBRIC_BACKEND=ollama but Ollama is not running.")
         pytest.skip("No LLM backend available. Run Ollama or set PYTEST_LLM_RUBRIC_BACKEND.")
 
     elif backend == "auto":
-        judge = _discover_ollama()
-        if judge is not None:
-            return judge
-        judge = _discover_anthropic()
-        if judge is not None:
-            return judge
-        judge = _discover_openai()
-        if judge is not None:
-            return judge
+        for discover in (_discover_ollama, _discover_anthropic, _discover_openai):
+            if (judge := discover()) is not None:
+                return judge
         pytest.skip("PYTEST_LLM_RUBRIC_BACKEND=auto but no backend found.")
 
     else:

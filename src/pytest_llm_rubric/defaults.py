@@ -5,6 +5,7 @@ is not set. Each provider falls back to its default listed here.
 """
 
 OLLAMA_MODEL = "granite4:3b"
+OLLAMA_BASE_URL = "http://localhost:11434"
 ANTHROPIC_MODEL = "claude-haiku-4-5"
 ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1"
 OPENAI_MODEL = "gpt-5.4-nano"

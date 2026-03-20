@@ -67,6 +67,20 @@ class TestDiscoverOpenAI:
 
 pytest_plugins = ["pytester"]
 
+# Shared conftest snippet for pytester tests that need a fake judge_llm.
+# Defined once here so that JudgeLLM Protocol changes only require one update.
+_FAKE_JUDGE_CONFTEST = """
+import pytest
+
+class FakeLLM:
+    def complete(self, messages, max_tokens=256):
+        return "fake"
+
+@pytest.fixture(scope="session")
+def judge_llm():
+    return FakeLLM()
+"""
+
 
 class TestJudgeLLMFixture:
     def test_skip_when_no_backend(self, pytester, monkeypatch):
@@ -95,21 +109,11 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(skipped=1)
 
     def test_override_fixture(self, pytester):
-        pytester.makeconftest("""
-            import pytest
-
-            class FakeLLM:
-                def complete(self, messages):
-                    return "fake response"
-
-            @pytest.fixture
-            def judge_llm():
-                return FakeLLM()
-        """)
+        pytester.makeconftest(_FAKE_JUDGE_CONFTEST)
         pytester.makepyfile("""
             def test_uses_fake(judge_llm):
                 result = judge_llm.complete([{"role": "user", "content": "hi"}])
-                assert result == "fake response"
+                assert result == "fake"
         """)
         result = pytester.runpytest("-v")
         result.assert_outcomes(passed=1)
@@ -125,17 +129,7 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(skipped=1)
 
     def test_llm_rubric_marker_auto_applied(self, pytester):
-        pytester.makeconftest("""
-            import pytest
-
-            class FakeLLM:
-                def complete(self, messages, max_tokens=256):
-                    return "fake"
-
-            @pytest.fixture(scope="session")
-            def judge_llm():
-                return FakeLLM()
-        """)
+        pytester.makeconftest(_FAKE_JUDGE_CONFTEST)
         pytester.makepyfile("""
             def test_with_judge(judge_llm):
                 assert judge_llm is not None
@@ -147,17 +141,7 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(passed=1)
 
     def test_exclude_llm_rubric_marker(self, pytester):
-        pytester.makeconftest("""
-            import pytest
-
-            class FakeLLM:
-                def complete(self, messages, max_tokens=256):
-                    return "fake"
-
-            @pytest.fixture(scope="session")
-            def judge_llm():
-                return FakeLLM()
-        """)
+        pytester.makeconftest(_FAKE_JUDGE_CONFTEST)
         pytester.makepyfile("""
             def test_with_judge(judge_llm):
                 assert judge_llm is not None
