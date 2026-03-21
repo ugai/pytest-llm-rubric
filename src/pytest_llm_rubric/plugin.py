@@ -32,7 +32,7 @@ def _resolve_model(env_var: str, default: str) -> str:
 class JudgeLLM(Protocol):
     """Protocol for LLM backends. Override the judge_llm fixture to provide your own."""
 
-    def complete(self, messages: list[dict[str, Any]], max_tokens: int = 256) -> str: ...
+    def complete(self, messages: list[dict[str, Any]], max_output_tokens: int = 256) -> str: ...
 
 
 class OpenAICompatibleJudge:
@@ -43,16 +43,20 @@ class OpenAICompatibleJudge:
         self._model = model
         self._use_legacy_max_tokens = use_legacy_max_tokens
 
-    def complete(self, messages: list[dict[str, Any]], max_tokens: int = 256) -> str:
-        kwargs: dict[str, Any] = {
-            "model": self._model,
-            "messages": cast(list[ChatCompletionMessageParam], messages),
-        }
+    def complete(self, messages: list[dict[str, Any]], max_output_tokens: int = 256) -> str:
+        msgs = cast(list[ChatCompletionMessageParam], messages)
         if self._use_legacy_max_tokens:
-            kwargs["max_tokens"] = max_tokens
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=msgs,
+                max_tokens=max_output_tokens,
+            )
         else:
-            kwargs["max_completion_tokens"] = max_tokens
-        response = self._client.chat.completions.create(**kwargs)
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=msgs,
+                max_completion_tokens=max_output_tokens,
+            )
         return response.choices[0].message.content or ""
 
 

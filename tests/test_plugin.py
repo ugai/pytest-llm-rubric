@@ -74,7 +74,7 @@ _FAKE_JUDGE_CONFTEST = """
 import pytest
 
 class FakeLLM:
-    def complete(self, messages, max_tokens=256):
+    def complete(self, messages, max_output_tokens=256):
         return "fake"
 
 @pytest.fixture(scope="session")
@@ -176,7 +176,7 @@ class TestMaxTokensParam:
 
     def test_default_uses_max_completion_tokens(self):
         judge, mock_client = self._make_judge(use_legacy_max_tokens=False)
-        judge.complete([{"role": "user", "content": "hi"}], max_tokens=100)
+        judge.complete([{"role": "user", "content": "hi"}], max_output_tokens=100)
         kwargs = mock_client.chat.completions.create.call_args
         assert "max_completion_tokens" in kwargs.kwargs
         assert "max_tokens" not in kwargs.kwargs
@@ -184,7 +184,7 @@ class TestMaxTokensParam:
 
     def test_legacy_uses_max_tokens(self):
         judge, mock_client = self._make_judge(use_legacy_max_tokens=True)
-        judge.complete([{"role": "user", "content": "hi"}], max_tokens=100)
+        judge.complete([{"role": "user", "content": "hi"}], max_output_tokens=100)
         kwargs = mock_client.chat.completions.create.call_args
         assert "max_tokens" in kwargs.kwargs
         assert "max_completion_tokens" not in kwargs.kwargs

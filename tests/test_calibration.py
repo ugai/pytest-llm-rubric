@@ -13,7 +13,7 @@ class FakeLLM:
     def __init__(self, response: str):
         self._response = response
 
-    def complete(self, messages: list[dict], max_tokens: int = 256) -> str:
+    def complete(self, messages: list[dict], max_output_tokens: int = 256) -> str:
         return self._response
 
 
@@ -25,7 +25,7 @@ class ReplayLLM:
         self._transform = transform
         self.captured_prompts: list[str] = []
 
-    def complete(self, messages: list[dict], max_tokens: int = 256) -> str:
+    def complete(self, messages: list[dict], max_output_tokens: int = 256) -> str:
         self.captured_prompts.append(messages[0]["content"])
         expected = GOLDEN_TESTS[self._index]["expected"]
         self._index += 1
