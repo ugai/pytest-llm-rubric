@@ -42,6 +42,7 @@ line-length = 100
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 markers = [
     "integration: tests that require a running LLM backend (Ollama, API keys)",
     "llm_rubric: tests that use the judge_llm fixture (auto-applied by plugin)",
