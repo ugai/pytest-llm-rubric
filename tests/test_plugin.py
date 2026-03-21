@@ -105,6 +105,40 @@ class TestAnyLLMJudge:
 
         assert "api_base" not in mock_comp.call_args.kwargs
 
+    def test_complete_retries_on_empty_response(self):
+        """Empty responses are retried up to _MAX_EMPTY_RETRIES times."""
+        empty = MagicMock(choices=[MagicMock(message=MagicMock(content=""))])
+        ok = MagicMock(choices=[MagicMock(message=MagicMock(content="PASS"))])
+
+        with patch("any_llm.completion", side_effect=[empty, ok]) as mock_comp:
+            judge = AnyLLMJudge("m", "ollama", api_base="http://localhost:11434")
+            result = judge.complete([{"role": "user", "content": "hi"}])
+
+        assert result == "PASS"
+        assert mock_comp.call_count == 2
+
+    def test_complete_returns_empty_after_all_retries_exhausted(self):
+        """Returns empty string when all retries produce empty responses."""
+        empty = MagicMock(choices=[MagicMock(message=MagicMock(content=""))])
+
+        with patch("any_llm.completion", return_value=empty) as mock_comp:
+            judge = AnyLLMJudge("m", "ollama", api_base="http://localhost:11434")
+            result = judge.complete([{"role": "user", "content": "hi"}])
+
+        assert result == ""
+        assert mock_comp.call_count == 1 + AnyLLMJudge._MAX_EMPTY_RETRIES
+
+    def test_complete_no_retry_on_nonempty_response(self):
+        """Non-empty responses are returned immediately without retry."""
+        ok = MagicMock(choices=[MagicMock(message=MagicMock(content="FAIL"))])
+
+        with patch("any_llm.completion", return_value=ok) as mock_comp:
+            judge = AnyLLMJudge("m", "openai", api_key="k")
+            result = judge.complete([{"role": "user", "content": "hi"}])
+
+        assert result == "FAIL"
+        assert mock_comp.call_count == 1
+
 
 # ---------------------------------------------------------------------------
 # Fixture tests (using pytester for isolation)
