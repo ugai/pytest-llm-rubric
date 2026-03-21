@@ -15,8 +15,8 @@ import httpx
 from openai import OpenAI
 
 from pytest_llm_rubric.calibration import calibrate
-from pytest_llm_rubric.defaults import OLLAMA_BASE_URL
 from pytest_llm_rubric.plugin import OpenAICompatibleJudge
+from pytest_llm_rubric.utils import parse_ollama_host
 
 
 def _get_ollama_models(base_url: str) -> list[dict]:
@@ -33,7 +33,9 @@ def _size_label(size_bytes: int) -> str:
     return f"{mb:.0f}MB"
 
 
-def find_best_local_model(base_url: str = OLLAMA_BASE_URL) -> None:
+def find_best_local_model(base_url: str | None = None) -> None:
+    if base_url is None:
+        base_url = parse_ollama_host(os.environ.get("OLLAMA_HOST"))
     try:
         models = _get_ollama_models(base_url)
     except Exception as e:
@@ -92,8 +94,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Find the best local model for rubric grading")
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("OLLAMA_HOST", OLLAMA_BASE_URL),
-        help=f"Ollama base URL (default: $OLLAMA_HOST or {OLLAMA_BASE_URL})",
+        default=parse_ollama_host(os.environ.get("OLLAMA_HOST")),
+        help="Ollama base URL (default: $OLLAMA_HOST or http://127.0.0.1:11434)",
     )
     args = parser.parse_args()
     find_best_local_model(args.base_url)

@@ -14,10 +14,10 @@ from pytest_llm_rubric.calibration import calibrate
 from pytest_llm_rubric.defaults import (
     ANTHROPIC_BASE_URL,
     ANTHROPIC_MODEL,
-    OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OPENAI_MODEL,
 )
+from pytest_llm_rubric.utils import parse_ollama_host
 
 ENV_BACKEND = "PYTEST_LLM_RUBRIC_BACKEND"
 ENV_MODEL = "PYTEST_LLM_RUBRIC_MODEL"
@@ -55,7 +55,7 @@ def _discover_ollama() -> OpenAICompatibleJudge | None:
     """Try to connect to a local Ollama instance."""
     import httpx
 
-    base_url = os.environ.get("OLLAMA_HOST", OLLAMA_BASE_URL)
+    base_url = parse_ollama_host(os.environ.get("OLLAMA_HOST"))
     try:
         resp = httpx.get(f"{base_url}/api/tags", timeout=5)
         resp.raise_for_status()
