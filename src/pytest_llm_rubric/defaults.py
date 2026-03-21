@@ -4,8 +4,9 @@ Edit these values to change which model is used when PYTEST_LLM_RUBRIC_MODEL
 is not set. Each provider falls back to its default listed here.
 """
 
-OLLAMA_MODEL = "granite4:3b"
-OLLAMA_BASE_URL = "http://localhost:11434"
+# Chosen for stability (5/5 calibration passes) and multilingual strength.
+# Alternatives: gpt-oss:20b (20/20 stable, needs more RAM),
+#   nemotron-3-nano:4b (strong IFEval but intermittent empty responses).
+OLLAMA_MODEL = "qwen3.5:2b"
 ANTHROPIC_MODEL = "claude-haiku-4-5"
-ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1"
 OPENAI_MODEL = "gpt-5.4-nano"

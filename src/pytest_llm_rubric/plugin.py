@@ -7,12 +7,9 @@ import warnings
 from typing import Any, Protocol, cast
 
 import pytest
-from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam
 
 from pytest_llm_rubric.calibration import calibrate
 from pytest_llm_rubric.defaults import (
-    ANTHROPIC_BASE_URL,
     ANTHROPIC_MODEL,
     OLLAMA_MODEL,
     OPENAI_MODEL,
@@ -35,32 +32,44 @@ class JudgeLLM(Protocol):
     def complete(self, messages: list[dict[str, Any]], max_output_tokens: int = 256) -> str: ...
 
 
-class OpenAICompatibleJudge:
-    """Judge backed by any OpenAI-compatible API (OpenAI, Anthropic, Ollama, Groq, etc.)."""
+class AnyLLMJudge:
+    """Judge backed by any-llm-sdk. Supports Ollama, OpenAI, Anthropic, and more."""
 
-    def __init__(self, client: OpenAI, model: str, *, use_legacy_max_tokens: bool = False) -> None:
-        self._client = client
+    def __init__(
+        self,
+        model: str,
+        provider: str,
+        *,
+        api_base: str | None = None,
+        api_key: str | None = None,
+    ) -> None:
         self._model = model
-        self._use_legacy_max_tokens = use_legacy_max_tokens
+        self._provider = provider
+        self._api_base = api_base
+        self._api_key = api_key
 
     def complete(self, messages: list[dict[str, Any]], max_output_tokens: int = 256) -> str:
-        msgs = cast(list[ChatCompletionMessageParam], messages)
-        if self._use_legacy_max_tokens:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=msgs,
-                max_tokens=max_output_tokens,
-            )
-        else:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=msgs,
-                max_completion_tokens=max_output_tokens,
-            )
+        from any_llm import completion
+        from any_llm.types.completion import ChatCompletion
+
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "provider": self._provider,
+            "max_tokens": max_output_tokens,
+            "reasoning_effort": "none",
+            "stream": False,
+        }
+        if self._api_base is not None:
+            kwargs["api_base"] = self._api_base
+        if self._api_key is not None:
+            kwargs["api_key"] = self._api_key
+
+        response = cast(ChatCompletion, completion(**kwargs))
         return response.choices[0].message.content or ""
 
 
-def _discover_ollama() -> OpenAICompatibleJudge | None:
+def _discover_ollama() -> AnyLLMJudge | None:
     """Try to connect to a local Ollama instance."""
     import httpx
 
@@ -84,31 +93,28 @@ def _discover_ollama() -> OpenAICompatibleJudge | None:
             return None
         else:
             model_name = models[0]["name"]
-        client = OpenAI(base_url=f"{base_url}/v1", api_key="ollama", timeout=120.0)
-        return OpenAICompatibleJudge(client, model_name, use_legacy_max_tokens=True)
+        return AnyLLMJudge(model_name, "ollama", api_base=base_url)
     except Exception:
         return None
 
 
-def _discover_anthropic() -> OpenAICompatibleJudge | None:
-    """Use Anthropic API via OpenAI-compatible endpoint if ANTHROPIC_API_KEY is set."""
+def _discover_anthropic() -> AnyLLMJudge | None:
+    """Use Anthropic API if ANTHROPIC_API_KEY is set."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return None
     model = _resolve_model("PYTEST_LLM_RUBRIC_ANTHROPIC_MODEL", ANTHROPIC_MODEL)
-    base_url = os.environ.get("PYTEST_LLM_RUBRIC_ANTHROPIC_BASE_URL", ANTHROPIC_BASE_URL)
-    client = OpenAI(base_url=base_url, api_key=api_key, timeout=30.0)
-    return OpenAICompatibleJudge(client, model)
+    api_base = os.environ.get("PYTEST_LLM_RUBRIC_ANTHROPIC_BASE_URL")
+    return AnyLLMJudge(model, "anthropic", api_key=api_key, api_base=api_base)
 
 
-def _discover_openai() -> OpenAICompatibleJudge | None:
+def _discover_openai() -> AnyLLMJudge | None:
     """Use OpenAI API if OPENAI_API_KEY is set."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
     model = _resolve_model("PYTEST_LLM_RUBRIC_OPENAI_MODEL", OPENAI_MODEL)
-    client = OpenAI(api_key=api_key, timeout=30.0)
-    return OpenAICompatibleJudge(client, model)
+    return AnyLLMJudge(model, "openai", api_key=api_key)
 
 
 def _default_judge_llm() -> JudgeLLM:

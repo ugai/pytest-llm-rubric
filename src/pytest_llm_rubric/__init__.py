@@ -11,17 +11,17 @@ def __getattr__(name: str):  # noqa: ANN001
 
         _exports = {"CalibrationResult": CalibrationResult, "calibrate": calibrate}
         return _exports[name]
-    if name in ("JudgeLLM", "OpenAICompatibleJudge"):
-        from pytest_llm_rubric.plugin import JudgeLLM, OpenAICompatibleJudge
+    if name in ("JudgeLLM", "AnyLLMJudge"):
+        from pytest_llm_rubric.plugin import AnyLLMJudge, JudgeLLM
 
-        _exports = {"JudgeLLM": JudgeLLM, "OpenAICompatibleJudge": OpenAICompatibleJudge}
+        _exports = {"JudgeLLM": JudgeLLM, "AnyLLMJudge": AnyLLMJudge}
         return _exports[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [
+    "AnyLLMJudge",
     "CalibrationResult",
     "JudgeLLM",
-    "OpenAICompatibleJudge",
     "calibrate",
 ]
