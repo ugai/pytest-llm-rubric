@@ -6,10 +6,14 @@
 
 
 def __getattr__(name: str):  # noqa: ANN001
-    if name in ("CalibrationResult", "calibrate"):
-        from pytest_llm_rubric.calibration import CalibrationResult, calibrate
+    if name in ("CalibrationResult", "Verdict", "calibrate"):
+        from pytest_llm_rubric.calibration import CalibrationResult, Verdict, calibrate
 
-        _exports = {"CalibrationResult": CalibrationResult, "calibrate": calibrate}
+        _exports = {
+            "CalibrationResult": CalibrationResult,
+            "Verdict": Verdict,
+            "calibrate": calibrate,
+        }
         return _exports[name]
     if name in ("JudgeLLM", "AnyLLMJudge"):
         from pytest_llm_rubric.plugin import AnyLLMJudge, JudgeLLM
@@ -23,5 +27,6 @@ __all__ = [
     "AnyLLMJudge",
     "CalibrationResult",
     "JudgeLLM",
+    "Verdict",
     "calibrate",
 ]

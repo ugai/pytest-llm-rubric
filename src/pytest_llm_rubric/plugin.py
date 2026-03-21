@@ -29,7 +29,12 @@ def _resolve_model(env_var: str, default: str) -> str:
 class JudgeLLM(Protocol):
     """Protocol for LLM backends. Override the judge_llm fixture to provide your own."""
 
-    def complete(self, messages: list[dict[str, Any]], max_output_tokens: int = 256) -> str: ...
+    def complete(
+        self,
+        messages: list[dict[str, Any]],
+        max_output_tokens: int = 256,
+        response_format: type | None = None,
+    ) -> str: ...
 
 
 class AnyLLMJudge:
@@ -50,7 +55,12 @@ class AnyLLMJudge:
 
     _MAX_EMPTY_RETRIES = 2
 
-    def complete(self, messages: list[dict[str, Any]], max_output_tokens: int = 256) -> str:
+    def complete(
+        self,
+        messages: list[dict[str, Any]],
+        max_output_tokens: int = 256,
+        response_format: type | None = None,
+    ) -> str:
         from any_llm import completion
         from any_llm.types.completion import ChatCompletion
 
@@ -66,6 +76,8 @@ class AnyLLMJudge:
             kwargs["api_base"] = self._api_base
         if self._api_key is not None:
             kwargs["api_key"] = self._api_key
+        if response_format is not None:
+            kwargs["response_format"] = response_format
 
         for attempt in range(1 + self._MAX_EMPTY_RETRIES):
             response = cast(ChatCompletion, completion(**kwargs))
