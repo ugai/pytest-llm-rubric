@@ -14,10 +14,9 @@ import os
 import sys
 
 import httpx
-from openai import OpenAI
 
 from pytest_llm_rubric.calibration import calibrate
-from pytest_llm_rubric.plugin import OpenAICompatibleJudge
+from pytest_llm_rubric.plugin import AnyLLMJudge
 from pytest_llm_rubric.utils import OLLAMA_DEFAULT_HOST, OLLAMA_DEFAULT_PORT, parse_ollama_host
 
 
@@ -81,14 +80,13 @@ def find_best_local_model(
 
     results = []
     recommended = None
-    client = OpenAI(base_url=f"{base_url}/v1", api_key="ollama", timeout=120.0)
 
     for model in models:
         name = model["name"]
         size = _size_label(model.get("size", 0))
         print(f"  {name:<30} ({size:>6}) ... ", end="", flush=True)
 
-        judge = OpenAICompatibleJudge(client, name, use_legacy_max_tokens=True)
+        judge = AnyLLMJudge(name, "ollama", api_base=base_url)
 
         try:
             result = calibrate(judge)
@@ -128,7 +126,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--base-url",
         default=parse_ollama_host(os.environ.get("OLLAMA_HOST")),
-        help=f"Ollama base URL (default: $OLLAMA_HOST or http://{OLLAMA_DEFAULT_HOST}:{OLLAMA_DEFAULT_PORT})",
+        help=(
+            f"Ollama base URL (default: $OLLAMA_HOST or "
+            f"http://{OLLAMA_DEFAULT_HOST}:{OLLAMA_DEFAULT_PORT})"
+        ),
     )
     parser.add_argument(
         "--verbose",
