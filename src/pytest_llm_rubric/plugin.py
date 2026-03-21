@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import warnings
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import pytest
 
@@ -50,6 +50,7 @@ class AnyLLMJudge:
 
     def complete(self, messages: list[dict[str, Any]], max_output_tokens: int = 256) -> str:
         from any_llm import completion
+        from any_llm.types.completion import ChatCompletion
 
         kwargs: dict[str, Any] = {
             "model": self._model,
@@ -64,8 +65,8 @@ class AnyLLMJudge:
         if self._api_key is not None:
             kwargs["api_key"] = self._api_key
 
-        response = completion(**kwargs)
-        return response.choices[0].message.content or ""  # type: ignore[union-attr]
+        response = cast(ChatCompletion, completion(**kwargs))
+        return response.choices[0].message.content or ""
 
 
 def _discover_ollama() -> AnyLLMJudge | None:

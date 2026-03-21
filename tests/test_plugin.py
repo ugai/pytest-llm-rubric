@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -59,6 +60,50 @@ class TestDiscoverOpenAI:
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         judge = _discover_openai()
         assert isinstance(judge, AnyLLMJudge)
+
+
+# ---------------------------------------------------------------------------
+# AnyLLMJudge unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestAnyLLMJudge:
+    def test_complete_passes_max_tokens(self):
+        """max_output_tokens is forwarded as max_tokens to any_llm.completion()."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="PASS"))]
+
+        with patch("any_llm.completion", return_value=mock_response) as mock_comp:
+            judge = AnyLLMJudge("test-model", "openai", api_key="k")
+            result = judge.complete([{"role": "user", "content": "hi"}], max_output_tokens=100)
+
+        assert result == "PASS"
+        kwargs = mock_comp.call_args.kwargs
+        assert kwargs["max_tokens"] == 100
+        assert kwargs["model"] == "test-model"
+        assert kwargs["provider"] == "openai"
+        assert kwargs["reasoning_effort"] == "none"
+        assert kwargs["stream"] is False
+
+    def test_complete_forwards_api_base(self):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="FAIL"))]
+
+        with patch("any_llm.completion", return_value=mock_response) as mock_comp:
+            judge = AnyLLMJudge("m", "ollama", api_base="http://host:11434")
+            judge.complete([{"role": "user", "content": "hi"}])
+
+        assert mock_comp.call_args.kwargs["api_base"] == "http://host:11434"
+
+    def test_complete_omits_none_api_base(self):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="OK"))]
+
+        with patch("any_llm.completion", return_value=mock_response) as mock_comp:
+            judge = AnyLLMJudge("m", "openai", api_key="k")
+            judge.complete([{"role": "user", "content": "hi"}])
+
+        assert "api_base" not in mock_comp.call_args.kwargs
 
 
 # ---------------------------------------------------------------------------
