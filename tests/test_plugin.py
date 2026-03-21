@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -73,7 +74,7 @@ _FAKE_JUDGE_CONFTEST = """
 import pytest
 
 class FakeLLM:
-    def complete(self, messages, max_tokens=256):
+    def complete(self, messages, max_output_tokens=256):
         return "fake"
 
 @pytest.fixture(scope="session")
@@ -151,6 +152,43 @@ class TestJudgeLLMFixture:
         """)
         result = pytester.runpytest_subprocess("-v", "-m", "not llm_rubric")
         result.assert_outcomes(passed=1, deselected=1)
+
+
+# ---------------------------------------------------------------------------
+# max_completion_tokens vs max_tokens
+# ---------------------------------------------------------------------------
+
+
+class TestMaxTokensParam:
+    """Verify that use_legacy_max_tokens controls which parameter is sent."""
+
+    def _make_judge(
+        self, *, use_legacy_max_tokens: bool
+    ) -> tuple[OpenAICompatibleJudge, MagicMock]:
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="PASS"))]
+        )
+        judge = OpenAICompatibleJudge(
+            mock_client, "test-model", use_legacy_max_tokens=use_legacy_max_tokens
+        )
+        return judge, mock_client
+
+    def test_default_uses_max_completion_tokens(self):
+        judge, mock_client = self._make_judge(use_legacy_max_tokens=False)
+        judge.complete([{"role": "user", "content": "hi"}], max_output_tokens=100)
+        kwargs = mock_client.chat.completions.create.call_args
+        assert "max_completion_tokens" in kwargs.kwargs
+        assert "max_tokens" not in kwargs.kwargs
+        assert kwargs.kwargs["max_completion_tokens"] == 100
+
+    def test_legacy_uses_max_tokens(self):
+        judge, mock_client = self._make_judge(use_legacy_max_tokens=True)
+        judge.complete([{"role": "user", "content": "hi"}], max_output_tokens=100)
+        kwargs = mock_client.chat.completions.create.call_args
+        assert "max_tokens" in kwargs.kwargs
+        assert "max_completion_tokens" not in kwargs.kwargs
+        assert kwargs.kwargs["max_tokens"] == 100
 
 
 # ---------------------------------------------------------------------------

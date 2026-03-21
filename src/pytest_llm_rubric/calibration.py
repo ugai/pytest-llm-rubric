@@ -54,7 +54,7 @@ def calibrate(llm: JudgeLLM, system_prompt: str | None = None) -> CalibrationRes
             },
         ]
         try:
-            response = llm.complete(messages, max_tokens=16).strip().upper()
+            response = llm.complete(messages, max_output_tokens=16).strip().upper()
             m = _VERDICT_RE.match(response)
             verdict = m.group(1) if m else f"INVALID: {response[:50]}"
         except Exception as e:

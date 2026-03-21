@@ -32,22 +32,31 @@ def _resolve_model(env_var: str, default: str) -> str:
 class JudgeLLM(Protocol):
     """Protocol for LLM backends. Override the judge_llm fixture to provide your own."""
 
-    def complete(self, messages: list[dict[str, Any]], max_tokens: int = 256) -> str: ...
+    def complete(self, messages: list[dict[str, Any]], max_output_tokens: int = 256) -> str: ...
 
 
 class OpenAICompatibleJudge:
     """Judge backed by any OpenAI-compatible API (OpenAI, Anthropic, Ollama, Groq, etc.)."""
 
-    def __init__(self, client: OpenAI, model: str) -> None:
+    def __init__(self, client: OpenAI, model: str, *, use_legacy_max_tokens: bool = False) -> None:
         self._client = client
         self._model = model
+        self._use_legacy_max_tokens = use_legacy_max_tokens
 
-    def complete(self, messages: list[dict[str, Any]], max_tokens: int = 256) -> str:
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=cast(list[ChatCompletionMessageParam], messages),
-            max_tokens=max_tokens,
-        )
+    def complete(self, messages: list[dict[str, Any]], max_output_tokens: int = 256) -> str:
+        msgs = cast(list[ChatCompletionMessageParam], messages)
+        if self._use_legacy_max_tokens:
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=msgs,
+                max_tokens=max_output_tokens,
+            )
+        else:
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=msgs,
+                max_completion_tokens=max_output_tokens,
+            )
         return response.choices[0].message.content or ""
 
 
@@ -76,7 +85,7 @@ def _discover_ollama() -> OpenAICompatibleJudge | None:
         else:
             model_name = models[0]["name"]
         client = OpenAI(base_url=f"{base_url}/v1", api_key="ollama", timeout=120.0)
-        return OpenAICompatibleJudge(client, model_name)
+        return OpenAICompatibleJudge(client, model_name, use_legacy_max_tokens=True)
     except Exception:
         return None
 
