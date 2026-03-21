@@ -48,6 +48,8 @@ class AnyLLMJudge:
         self._api_base = api_base
         self._api_key = api_key
 
+    _MAX_EMPTY_RETRIES = 2
+
     def complete(self, messages: list[dict[str, Any]], max_output_tokens: int = 256) -> str:
         from any_llm import completion
         from any_llm.types.completion import ChatCompletion
@@ -65,8 +67,18 @@ class AnyLLMJudge:
         if self._api_key is not None:
             kwargs["api_key"] = self._api_key
 
-        response = cast(ChatCompletion, completion(**kwargs))
-        return response.choices[0].message.content or ""
+        for attempt in range(1 + self._MAX_EMPTY_RETRIES):
+            response = cast(ChatCompletion, completion(**kwargs))
+            content = response.choices[0].message.content or ""
+            if content:
+                return content
+            if attempt < self._MAX_EMPTY_RETRIES:
+                warnings.warn(
+                    f"Empty response from {self._model} "
+                    f"(attempt {attempt + 1}/{1 + self._MAX_EMPTY_RETRIES}), retrying.",
+                    stacklevel=2,
+                )
+        return ""
 
 
 def _discover_ollama() -> AnyLLMJudge | None:
