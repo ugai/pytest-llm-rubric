@@ -157,8 +157,13 @@ def _calibrate_or_skip(judge: JudgeLLM) -> JudgeLLM:
     result = calibrate(judge)
     if not result.passed:
         failures = [d for d in result.details if not d["correct"]]
-        msg = f"LLM backend failed calibration ({result.correct}/{result.total}).\n" + "\n".join(
-            f"  {f['criterion']}: expected {f['expected']}, got {f['actual']}" for f in failures
+        tested = len(result.details)
+        suffix = f" (stopped early after {tested}/{result.total})" if result.stopped_early else ""
+        msg = (
+            f"LLM backend failed calibration ({result.correct}/{result.total}){suffix}.\n"
+            + "\n".join(
+                f"  {f['criterion']}: expected {f['expected']}, got {f['actual']}" for f in failures
+            )
         )
         pytest.skip(msg)
     return judge

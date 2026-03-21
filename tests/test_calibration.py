@@ -42,10 +42,12 @@ class TestCalibrate:
         result = calibrate(FakeLLM("PASS"))
         assert result.passed is False
         assert result.correct < result.total
+        assert result.stopped_early is True
 
     def test_result_has_details(self):
         result = calibrate(FakeLLM("PASS"))
-        assert len(result.details) == result.total
+        assert len(result.details) <= result.total
+        assert len(result.details) > 0
         for detail in result.details:
             assert "criterion" in detail
             assert "expected" in detail
@@ -107,3 +109,18 @@ class TestCalibrate:
         result = calibrate(llm)
         assert result.passed is True
         assert llm.captured_prompts[0] == JUDGE_SYSTEM_PROMPT
+
+    def test_early_stop_on_first_failure(self):
+        """Calibration stops at the first incorrect answer."""
+        result = calibrate(FakeLLM("FAIL"))
+        # FakeLLM("FAIL") gets the first test wrong (expected PASS),
+        # so it should stop after 1 test.
+        assert result.stopped_early is True
+        assert len(result.details) == 1
+        assert result.correct == 0
+
+    def test_no_early_stop_on_perfect(self):
+        """Perfect judge runs all tests without early stopping."""
+        result = calibrate(ReplayLLM())
+        assert result.stopped_early is False
+        assert len(result.details) == result.total
