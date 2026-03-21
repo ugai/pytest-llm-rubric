@@ -16,7 +16,7 @@ from openai import OpenAI
 
 from pytest_llm_rubric.calibration import calibrate
 from pytest_llm_rubric.plugin import OpenAICompatibleJudge
-from pytest_llm_rubric.utils import parse_ollama_host
+from pytest_llm_rubric.utils import OLLAMA_DEFAULT_HOST, OLLAMA_DEFAULT_PORT, parse_ollama_host
 
 
 def _get_ollama_models(base_url: str) -> list[dict]:
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--base-url",
         default=parse_ollama_host(os.environ.get("OLLAMA_HOST")),
-        help="Ollama base URL (default: $OLLAMA_HOST or http://127.0.0.1:11434)",
+        help=f"Ollama base URL (default: $OLLAMA_HOST or http://{OLLAMA_DEFAULT_HOST}:{OLLAMA_DEFAULT_PORT})",
     )
     args = parser.parse_args()
     find_best_local_model(args.base_url)

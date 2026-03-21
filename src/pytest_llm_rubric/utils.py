@@ -5,7 +5,8 @@ from __future__ import annotations
 import ipaddress
 import urllib.parse
 
-_OLLAMA_DEFAULT_PORT = 11434
+OLLAMA_DEFAULT_HOST = "127.0.0.1"
+OLLAMA_DEFAULT_PORT = 11434
 
 
 def parse_ollama_host(host: str | None) -> str:
@@ -14,7 +15,7 @@ def parse_ollama_host(host: str | None) -> str:
     Handles the same formats as the Ollama CLI/server: bare hostnames, host:port,
     scheme://host, :port shorthand, trailing slashes, paths, and IPv6 brackets.
     """
-    host, port = host or "", _OLLAMA_DEFAULT_PORT
+    host, port = host or "", OLLAMA_DEFAULT_PORT
     scheme, _, hostport = host.partition("://")
     if not hostport:
         scheme, hostport = "http", host
@@ -24,7 +25,7 @@ def parse_ollama_host(host: str | None) -> str:
         port = 443
 
     split = urllib.parse.urlsplit(f"{scheme}://{hostport}")
-    host = split.hostname or "127.0.0.1"
+    host = split.hostname or OLLAMA_DEFAULT_HOST
     port = split.port or port
 
     try:
