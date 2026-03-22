@@ -32,7 +32,7 @@ Not a general essay grader or multi-dimensional scoring system.
 
 <!--pytest.mark.skip-->
 ```bash
-pip install pytest-llm-rubric[ollama]  # or: uv add --dev "pytest-llm-rubric[ollama]"
+pip install pytest-llm-rubric          # or: uv add --dev pytest-llm-rubric
 ollama serve                           # start Ollama (if not already running)
 ollama pull gpt-oss:20b               # any chat model works
 ```
@@ -94,11 +94,11 @@ All configuration is through environment variables.
 
 ### Backend selection
 
-Each backend requires its corresponding extra:
+Cloud backends require their corresponding extra:
 
 | `PYTEST_LLM_RUBRIC_BACKEND` | Extra | API key |
 |---|---|---|
-| (empty) / `ollama` | `[ollama]` | — |
+| (empty) / `ollama` | — (included) | — |
 | `anthropic` | `[anthropic]` | `ANTHROPIC_API_KEY` |
 | `openai` | `[openai]` | `OPENAI_API_KEY` |
 | `auto` | any of the above | — |
