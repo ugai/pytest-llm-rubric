@@ -96,16 +96,16 @@ class AnyLLMJudge:
         return ""
 
 
-def _discover_ollama() -> AnyLLMJudge | None:
-    """Try to connect to a local Ollama instance."""
+def _discover_ollama() -> AnyLLMJudge | str:
+    """Try to connect to a local Ollama instance.
+
+    Returns an ``AnyLLMJudge`` on success, or a human-readable reason string
+    explaining why discovery failed.
+    """
     try:
         import ollama as _ollama  # noqa: F401
     except ImportError:
-        warnings.warn(
-            "ollama package is not installed. Install with: pip install 'any-llm-sdk[ollama]'",
-            stacklevel=2,
-        )
-        return None
+        return "ollama package is not installed."
 
     import httpx
 
@@ -115,40 +115,44 @@ def _discover_ollama() -> AnyLLMJudge | None:
         resp.raise_for_status()
         models = resp.json().get("models", [])
         if not models:
-            return None
+            return "Ollama is running but has no models installed."
         available = {m["name"] for m in models}
         requested = _resolve_model(ENV_OLLAMA_MODEL, OLLAMA_MODEL or "")
         if requested and requested in available:
             model_name = requested
         elif requested and requested not in available:
-            warnings.warn(
+            return (
                 f"Requested Ollama model {requested!r} not found. "
-                f"Available: {', '.join(sorted(available))}.",
-                stacklevel=2,
+                f"Available: {', '.join(sorted(available))}."
             )
-            return None
         else:
             model_name = models[0]["name"]
         return AnyLLMJudge(model_name, "ollama", api_base=base_url)
     except Exception:
-        return None
+        return f"Could not connect to Ollama at {base_url}."
 
 
-def _discover_anthropic() -> AnyLLMJudge | None:
-    """Use Anthropic API if ANTHROPIC_API_KEY is set."""
+def _discover_anthropic() -> AnyLLMJudge | str:
+    """Use Anthropic API if ANTHROPIC_API_KEY is set.
+
+    Returns an ``AnyLLMJudge`` on success, or a reason string on failure.
+    """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        return None
+        return "ANTHROPIC_API_KEY is not set."
     model = _resolve_model(ENV_ANTHROPIC_MODEL, ANTHROPIC_MODEL)
     api_base = os.environ.get(ENV_ANTHROPIC_BASE_URL)
     return AnyLLMJudge(model, "anthropic", api_key=api_key, api_base=api_base)
 
 
-def _discover_openai() -> AnyLLMJudge | None:
-    """Use OpenAI API if OPENAI_API_KEY is set."""
+def _discover_openai() -> AnyLLMJudge | str:
+    """Use OpenAI API if OPENAI_API_KEY is set.
+
+    Returns an ``AnyLLMJudge`` on success, or a reason string on failure.
+    """
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        return None
+        return "OPENAI_API_KEY is not set."
     model = _resolve_model(ENV_OPENAI_MODEL, OPENAI_MODEL)
     return AnyLLMJudge(model, "openai", api_key=api_key)
 
@@ -169,27 +173,37 @@ def _default_judge_llm() -> JudgeLLM:
     backend = os.environ.get(ENV_BACKEND, "").lower()
 
     if backend == "openai":
-        if (judge := _discover_openai()) is not None:
-            return judge
-        pytest.fail("PYTEST_LLM_RUBRIC_BACKEND=openai but OPENAI_API_KEY is not set.")
+        result = _discover_openai()
+        if isinstance(result, AnyLLMJudge):
+            return result
+        pytest.fail(f"PYTEST_LLM_RUBRIC_BACKEND=openai but {result}")
 
     elif backend == "anthropic":
-        if (judge := _discover_anthropic()) is not None:
-            return judge
-        pytest.fail("PYTEST_LLM_RUBRIC_BACKEND=anthropic but ANTHROPIC_API_KEY is not set.")
+        result = _discover_anthropic()
+        if isinstance(result, AnyLLMJudge):
+            return result
+        pytest.fail(f"PYTEST_LLM_RUBRIC_BACKEND=anthropic but {result}")
 
     elif backend == "ollama" or backend == "":
-        if (judge := _discover_ollama()) is not None:
-            return judge
+        result = _discover_ollama()
+        if isinstance(result, AnyLLMJudge):
+            return result
         if backend == "ollama":
-            pytest.fail("PYTEST_LLM_RUBRIC_BACKEND=ollama but Ollama is not running.")
-        pytest.skip("No LLM backend available. Run Ollama or set PYTEST_LLM_RUBRIC_BACKEND.")
+            pytest.fail(f"PYTEST_LLM_RUBRIC_BACKEND=ollama but {result}")
+        pytest.skip(result)
 
     elif backend == "auto":
-        for discover in (_discover_ollama, _discover_anthropic, _discover_openai):
-            if (judge := discover()) is not None:
-                return judge
-        pytest.fail("PYTEST_LLM_RUBRIC_BACKEND=auto but no backend found.")
+        reasons: list[str] = []
+        for name, discover in [
+            ("ollama", _discover_ollama),
+            ("anthropic", _discover_anthropic),
+            ("openai", _discover_openai),
+        ]:
+            result = discover()
+            if isinstance(result, AnyLLMJudge):
+                return result
+            reasons.append(f"  {name}: {result}")
+        pytest.fail("PYTEST_LLM_RUBRIC_BACKEND=auto but no backend found.\n" + "\n".join(reasons))
 
     else:
         pytest.fail(f"Unknown PYTEST_LLM_RUBRIC_BACKEND: {backend!r}")
