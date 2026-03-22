@@ -56,7 +56,7 @@ def test_mentions_deadline(judge_llm):
 
 1. **Discover** — auto-detect available backends based on installed extras and env vars
 2. **Preflight** — verify the discovered backend can reliably judge PASS/FAIL before exposing it as `judge_llm` (skippable)
-3. **Provide or skip** — expose the `judge_llm` session fixture on success, or skip dependent tests if no backend is found or preflight fails
+3. **Provide, skip, or fail** — expose the `judge_llm` session fixture on success. If the default (empty) backend is unavailable or preflight fails, dependent tests are skipped. If an explicit backend is unavailable, tests fail
 
 Paid cloud APIs never run unless explicitly configured.
 
@@ -104,7 +104,7 @@ Each backend requires its corresponding extra:
 | `auto` | any of the above | — |
 
 `auto` tries Ollama → Anthropic → OpenAI, using the first available.
-If no backend is found or preflight fails, dependent tests are skipped (not failed).
+If the default (empty) backend is unavailable or preflight fails, dependent tests are skipped. If an explicit backend (`ollama`, `anthropic`, `openai`, `auto`) is set but unavailable, tests **fail** to surface CI misconfigurations.
 
 CI example:
 
