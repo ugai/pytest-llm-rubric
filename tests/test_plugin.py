@@ -20,8 +20,8 @@ from pytest_llm_rubric.plugin import (
 
 
 class TestDiscoverOllama:
-    def test_returns_none_when_ollama_package_missing(self, monkeypatch):
-        """Should return None with a warning when the ollama package is not importable."""
+    def test_returns_reason_when_ollama_package_missing(self, monkeypatch):
+        """Should return a reason string when the ollama package is not importable."""
         import builtins
         import importlib
 
@@ -37,33 +37,39 @@ class TestDiscoverOllama:
         if "ollama" in importlib.sys.modules:
             monkeypatch.delitem(importlib.sys.modules, "ollama")
 
-        with pytest.warns(match="ollama package is not installed"):
-            assert _discover_ollama() is None
+        result = _discover_ollama()
+        assert isinstance(result, str)
+        assert "not installed" in result
 
     def test_returns_judge_when_running(self):
-        judge = _discover_ollama()
-        if judge is None:
-            pytest.skip("Ollama is not running")
-        assert isinstance(judge, AnyLLMJudge)
+        result = _discover_ollama()
+        if isinstance(result, str):
+            pytest.skip(f"Ollama is not running: {result}")
+        assert isinstance(result, AnyLLMJudge)
 
-    def test_returns_none_when_unreachable(self, monkeypatch):
+    def test_returns_reason_when_unreachable(self, monkeypatch):
         monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
-        assert _discover_ollama() is None
+        result = _discover_ollama()
+        assert isinstance(result, str)
+        assert "Could not connect" in result
 
-    def test_returns_none_when_model_not_found(self, monkeypatch):
-        """Requesting a non-existent model should return None, not silently substitute."""
+    def test_returns_reason_when_model_not_found(self, monkeypatch):
+        """Requesting a non-existent model should return a reason, not silently substitute."""
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_OLLAMA_MODEL", "nonexistent-model-xyz")
-        judge = _discover_ollama()
-        if judge is not None:
+        result = _discover_ollama()
+        if isinstance(result, AnyLLMJudge):
             # Ollama is not running or has the exact model — skip
             pytest.skip("Ollama not running or model unexpectedly exists")
-        assert judge is None
+        assert isinstance(result, str)
+        assert "not found" in result
 
 
 class TestDiscoverAnthropic:
-    def test_returns_none_without_key(self, monkeypatch):
+    def test_returns_reason_without_key(self, monkeypatch):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        assert _discover_anthropic() is None
+        result = _discover_anthropic()
+        assert isinstance(result, str)
+        assert "ANTHROPIC_API_KEY" in result
 
     def test_returns_judge_with_key(self, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
@@ -72,9 +78,11 @@ class TestDiscoverAnthropic:
 
 
 class TestDiscoverOpenAI:
-    def test_returns_none_without_key(self, monkeypatch):
+    def test_returns_reason_without_key(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        assert _discover_openai() is None
+        result = _discover_openai()
+        assert isinstance(result, str)
+        assert "OPENAI_API_KEY" in result
 
     def test_returns_judge_with_key(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -216,8 +224,9 @@ class TestJudgeLLMFixture:
             def test_uses_judge(judge_llm):
                 assert judge_llm is not None
         """)
-        result = pytester.runpytest_subprocess("-v")
+        result = pytester.runpytest_subprocess("-v", "-rs")
         result.assert_outcomes(skipped=1)
+        result.stdout.fnmatch_lines(["*Could not connect to Ollama*"])
 
     def test_default_backend_ignores_api_keys(self, pytester, monkeypatch):
         """Default (empty) backend must use Ollama only, even when paid API keys are present."""
@@ -279,6 +288,28 @@ class TestJudgeLLMFixture:
         result = pytester.runpytest_subprocess("-v")
         result.assert_outcomes(errors=1)
 
+    def test_auto_backend_fails_with_reasons(self, pytester, monkeypatch):
+        """Auto mode should list per-provider reasons when all backends fail."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "auto")
+        monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(errors=1)
+        result.stdout.fnmatch_lines(
+            [
+                "*ollama: Could not connect*",
+                "*anthropic: ANTHROPIC_API_KEY*",
+                "*openai: OPENAI_API_KEY*",
+            ]
+        )
+
     def test_unknown_backend_fails(self, pytester, monkeypatch):
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "bogus")
         monkeypatch.setenv("PYTHONUTF8", "1")
@@ -323,9 +354,10 @@ class TestJudgeLLMFixture:
 @pytest.mark.integration
 class TestIntegration:
     def test_ollama_complete(self):
-        judge = _discover_ollama()
-        if judge is None:
-            pytest.skip("Ollama is not running")
+        result = _discover_ollama()
+        if isinstance(result, str):
+            pytest.skip(f"Ollama is not running: {result}")
+        judge = result
         response = judge.complete(
             [
                 {"role": "user", "content": "Reply with exactly: hello"},
@@ -336,9 +368,9 @@ class TestIntegration:
     def test_anthropic_complete(self):
         if not os.environ.get("ANTHROPIC_API_KEY"):
             pytest.skip("ANTHROPIC_API_KEY not set")
-        judge = _discover_anthropic()
-        assert judge is not None
-        response = judge.complete(
+        result = _discover_anthropic()
+        assert isinstance(result, AnyLLMJudge)
+        response = result.complete(
             [
                 {"role": "user", "content": "Reply with exactly: hello"},
             ]
@@ -348,9 +380,9 @@ class TestIntegration:
     def test_openai_complete(self):
         if not os.environ.get("OPENAI_API_KEY"):
             pytest.skip("OPENAI_API_KEY not set")
-        judge = _discover_openai()
-        assert judge is not None
-        response = judge.complete(
+        result = _discover_openai()
+        assert isinstance(result, AnyLLMJudge)
+        response = result.complete(
             [
                 {"role": "user", "content": "Reply with exactly: hello"},
             ]
