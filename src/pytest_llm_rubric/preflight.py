@@ -83,7 +83,7 @@ def preflight(llm: JudgeLLM, system_prompt: str | None = None) -> PreflightResul
         raw_response = ""
         try:
             raw_response = llm.complete(
-                messages, max_output_tokens=16, response_format=Verdict
+                messages, max_output_tokens=512, response_format=Verdict
             ).strip()
             verdict = _parse_verdict(raw_response)
         except Exception as e:

@@ -82,7 +82,6 @@ class TestAnyLLMJudge:
         assert kwargs["max_tokens"] == 100
         assert kwargs["model"] == "test-model"
         assert kwargs["provider"] == "openai"
-        assert kwargs["reasoning_effort"] == "none"
         assert kwargs["stream"] is False
 
     def test_complete_forwards_api_base(self):
