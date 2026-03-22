@@ -73,7 +73,6 @@ class AnyLLMJudge:
             "messages": messages,
             "provider": self._provider,
             "max_tokens": max_output_tokens,
-            "reasoning_effort": "none",
             "stream": False,
         }
         if self._api_base is not None:

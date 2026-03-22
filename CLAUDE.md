@@ -44,5 +44,5 @@ Anthropic is accessed via its OpenAI-compatible endpoint (`api.anthropic.com/v1`
 
 - The `judge_llm` fixture is `scope="session"` — preflight runs once per test session.
 - `PYTEST_LLM_RUBRIC_BACKEND` defaults to empty (Ollama only) to prevent accidental API costs. Cloud APIs require explicit opt-in.
-- `max_tokens=16` for preflight calls, `256` default for general use.
+- `max_tokens=512` for preflight calls (accommodates thinking models), `256` default for general use.
 - Preflight golden tests include "haystack" pairs (rule buried in long doc vs. similar doc without the rule) to screen out models that can only do trivial matching.
