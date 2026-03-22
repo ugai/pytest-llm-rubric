@@ -19,6 +19,10 @@ from pytest_llm_rubric.utils import parse_ollama_host
 ENV_BACKEND = "PYTEST_LLM_RUBRIC_BACKEND"
 ENV_MODEL = "PYTEST_LLM_RUBRIC_MODEL"
 ENV_SKIP_PREFLIGHT = "PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT"
+ENV_OLLAMA_MODEL = "PYTEST_LLM_RUBRIC_OLLAMA_MODEL"
+ENV_ANTHROPIC_MODEL = "PYTEST_LLM_RUBRIC_ANTHROPIC_MODEL"
+ENV_ANTHROPIC_BASE_URL = "PYTEST_LLM_RUBRIC_ANTHROPIC_BASE_URL"
+ENV_OPENAI_MODEL = "PYTEST_LLM_RUBRIC_OPENAI_MODEL"
 
 
 def _resolve_model(env_var: str, default: str) -> str:
@@ -105,7 +109,7 @@ def _discover_ollama() -> AnyLLMJudge | None:
         if not models:
             return None
         available = {m["name"] for m in models}
-        requested = _resolve_model("PYTEST_LLM_RUBRIC_OLLAMA_MODEL", OLLAMA_MODEL or "")
+        requested = _resolve_model(ENV_OLLAMA_MODEL, OLLAMA_MODEL or "")
         if requested and requested in available:
             model_name = requested
         elif requested and requested not in available:
@@ -127,8 +131,8 @@ def _discover_anthropic() -> AnyLLMJudge | None:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return None
-    model = _resolve_model("PYTEST_LLM_RUBRIC_ANTHROPIC_MODEL", ANTHROPIC_MODEL)
-    api_base = os.environ.get("PYTEST_LLM_RUBRIC_ANTHROPIC_BASE_URL")
+    model = _resolve_model(ENV_ANTHROPIC_MODEL, ANTHROPIC_MODEL)
+    api_base = os.environ.get(ENV_ANTHROPIC_BASE_URL)
     return AnyLLMJudge(model, "anthropic", api_key=api_key, api_base=api_base)
 
 
@@ -137,7 +141,7 @@ def _discover_openai() -> AnyLLMJudge | None:
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
-    model = _resolve_model("PYTEST_LLM_RUBRIC_OPENAI_MODEL", OPENAI_MODEL)
+    model = _resolve_model(ENV_OPENAI_MODEL, OPENAI_MODEL)
     return AnyLLMJudge(model, "openai", api_key=api_key)
 
 
@@ -146,10 +150,13 @@ def _default_judge_llm() -> JudgeLLM:
 
     Controlled by PYTEST_LLM_RUBRIC_BACKEND:
       (unset)    - try Ollama only, skip if unavailable
-      auto       - try Ollama, then Anthropic, then OpenAI
-      ollama     - Ollama only
-      anthropic  - Anthropic API only
-      openai     - OpenAI API only
+      auto       - try Ollama → Anthropic → OpenAI; fail if none found
+      ollama     - Ollama only; fail if unavailable
+      anthropic  - Anthropic API only; fail if unavailable
+      openai     - OpenAI API only; fail if unavailable
+
+    Explicit backends fail (pytest.fail) instead of skip so that CI
+    misconfigurations surface as errors rather than silent skips.
     """
     backend = os.environ.get(ENV_BACKEND, "").lower()
 

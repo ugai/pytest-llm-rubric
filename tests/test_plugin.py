@@ -227,6 +227,7 @@ class TestJudgeLLMFixture:
     def test_explicit_ollama_fails_when_unavailable(self, pytester, monkeypatch):
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "ollama")
         monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
+        monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
         pytester.makepyfile("""
             def test_uses_judge(judge_llm):
@@ -238,6 +239,7 @@ class TestJudgeLLMFixture:
     def test_explicit_openai_fails_without_key(self, pytester, monkeypatch):
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "openai")
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
         pytester.makepyfile("""
             def test_uses_judge(judge_llm):
@@ -249,6 +251,7 @@ class TestJudgeLLMFixture:
     def test_explicit_anthropic_fails_without_key(self, pytester, monkeypatch):
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "anthropic")
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
         pytester.makepyfile("""
             def test_uses_judge(judge_llm):
@@ -259,6 +262,7 @@ class TestJudgeLLMFixture:
 
     def test_unknown_backend_fails(self, pytester, monkeypatch):
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "bogus")
+        monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
         pytester.makepyfile("""
             def test_uses_judge(judge_llm):
