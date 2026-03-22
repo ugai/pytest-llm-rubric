@@ -156,28 +156,28 @@ def _default_judge_llm() -> JudgeLLM:
     if backend == "openai":
         if (judge := _discover_openai()) is not None:
             return judge
-        pytest.skip("PYTEST_LLM_RUBRIC_BACKEND=openai but OPENAI_API_KEY is not set.")
+        pytest.fail("PYTEST_LLM_RUBRIC_BACKEND=openai but OPENAI_API_KEY is not set.")
 
     elif backend == "anthropic":
         if (judge := _discover_anthropic()) is not None:
             return judge
-        pytest.skip("PYTEST_LLM_RUBRIC_BACKEND=anthropic but ANTHROPIC_API_KEY is not set.")
+        pytest.fail("PYTEST_LLM_RUBRIC_BACKEND=anthropic but ANTHROPIC_API_KEY is not set.")
 
     elif backend == "ollama" or backend == "":
         if (judge := _discover_ollama()) is not None:
             return judge
         if backend == "ollama":
-            pytest.skip("PYTEST_LLM_RUBRIC_BACKEND=ollama but Ollama is not running.")
+            pytest.fail("PYTEST_LLM_RUBRIC_BACKEND=ollama but Ollama is not running.")
         pytest.skip("No LLM backend available. Run Ollama or set PYTEST_LLM_RUBRIC_BACKEND.")
 
     elif backend == "auto":
         for discover in (_discover_ollama, _discover_anthropic, _discover_openai):
             if (judge := discover()) is not None:
                 return judge
-        pytest.skip("PYTEST_LLM_RUBRIC_BACKEND=auto but no backend found.")
+        pytest.fail("PYTEST_LLM_RUBRIC_BACKEND=auto but no backend found.")
 
     else:
-        pytest.skip(f"Unknown PYTEST_LLM_RUBRIC_BACKEND: {backend!r}")
+        pytest.fail(f"Unknown PYTEST_LLM_RUBRIC_BACKEND: {backend!r}")
 
 
 def _calibrate_or_skip(judge: JudgeLLM) -> JudgeLLM:

@@ -224,7 +224,40 @@ class TestJudgeLLMFixture:
         result = pytester.runpytest_subprocess("-v")
         result.assert_outcomes(passed=1)
 
-    def test_unknown_backend_skips(self, pytester, monkeypatch):
+    def test_explicit_ollama_fails_when_unavailable(self, pytester, monkeypatch):
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "ollama")
+        monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(errors=1)
+
+    def test_explicit_openai_fails_without_key(self, pytester, monkeypatch):
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "openai")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(errors=1)
+
+    def test_explicit_anthropic_fails_without_key(self, pytester, monkeypatch):
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "anthropic")
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(errors=1)
+
+    def test_unknown_backend_fails(self, pytester, monkeypatch):
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_BACKEND", "bogus")
         pytester.makeconftest("")
         pytester.makepyfile("""
@@ -232,7 +265,7 @@ class TestJudgeLLMFixture:
                 assert judge_llm is not None
         """)
         result = pytester.runpytest_subprocess("-v")
-        result.assert_outcomes(skipped=1)
+        result.assert_outcomes(errors=1)
 
     def test_llm_rubric_marker_auto_applied(self, pytester):
         pytester.makeconftest(_FAKE_JUDGE_CONFTEST)
