@@ -1,4 +1,4 @@
-"""Golden test data for calibration: document/criterion pairs with expected verdicts.
+"""Golden test data for preflight: document/criterion pairs with expected verdicts.
 
 Includes short-form pairs (basic semantic matching) and haystack pairs
 (rule buried in a long document vs. similar document without the rule).

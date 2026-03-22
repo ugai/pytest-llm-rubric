@@ -21,15 +21,15 @@ uv run python -m pytest_llm_rubric.find_local_model  # Find best local model
 
 This is a pytest plugin (`pytest11` entry point) that provides `judge_llm`, a session-scoped fixture for rubric-based LLM-as-judge testing.
 
-**Core pipeline: discover → calibrate → judge**
+**Core pipeline: discover → preflight → judge**
 
-- **`plugin.py`** — Entry point. Defines the `JudgeLLM` Protocol and `OpenAICompatibleJudge` implementation. The `judge_llm` fixture auto-discovers a backend, calibrates it, and returns it. All providers use the OpenAI SDK (`openai` is the only LLM dependency). Users override the fixture in their `conftest.py` for custom backends.
+- **`plugin.py`** — Entry point. Defines the `JudgeLLM` Protocol and `AnyLLMJudge` implementation. The `judge_llm` fixture auto-discovers a backend, runs preflight, and returns it. Users override the fixture in their `conftest.py` for custom backends.
 
-- **`calibration.py`** — Golden test suite (12 pairs: 6 short-form + 6 haystack) that validates whether an LLM can reliably do binary PASS/FAIL semantic judgments. Session runs calibration once; if the LLM fails, all rubric tests skip.
+- **`preflight.py`** — Golden test suite (12 pairs: 6 short-form + 6 haystack) that validates whether an LLM can reliably do binary PASS/FAIL semantic judgments. Session runs preflight once; if the LLM fails, all rubric tests skip.
 
 - **`defaults.py`** — Single file for default model names and endpoints per provider. Intended to be human-editable.
 
-- **`find_local_model.py`** — CLI tool that runs calibration against all local models (currently Ollama) and recommends the smallest passing one.
+- **`find_local_model.py`** — CLI tool that runs preflight against all local models (currently Ollama) and recommends the smallest passing one.
 
 **Backend discovery order** is controlled by `PYTEST_LLM_RUBRIC_BACKEND`:
 - Empty (default): Ollama only — safe, no API costs
@@ -42,7 +42,7 @@ Anthropic is accessed via its OpenAI-compatible endpoint (`api.anthropic.com/v1`
 
 ## Key Design Decisions
 
-- The `judge_llm` fixture is `scope="session"` — calibration runs once per test session.
+- The `judge_llm` fixture is `scope="session"` — preflight runs once per test session.
 - `PYTEST_LLM_RUBRIC_BACKEND` defaults to empty (Ollama only) to prevent accidental API costs. Cloud APIs require explicit opt-in.
-- `max_tokens=16` for calibration calls, `256` default for general use.
-- Calibration golden tests include "haystack" pairs (rule buried in long doc vs. similar doc without the rule) to screen out models that can only do trivial matching.
+- `max_tokens=16` for preflight calls, `256` default for general use.
+- Preflight golden tests include "haystack" pairs (rule buried in long doc vs. similar doc without the rule) to screen out models that can only do trivial matching.

@@ -8,17 +8,17 @@ from typing import Any, Protocol, cast
 
 import pytest
 
-from pytest_llm_rubric.calibration import calibrate
 from pytest_llm_rubric.defaults import (
     ANTHROPIC_MODEL,
     OLLAMA_MODEL,
     OPENAI_MODEL,
 )
+from pytest_llm_rubric.preflight import preflight
 from pytest_llm_rubric.utils import parse_ollama_host
 
 ENV_BACKEND = "PYTEST_LLM_RUBRIC_BACKEND"
 ENV_MODEL = "PYTEST_LLM_RUBRIC_MODEL"
-ENV_SKIP_CALIBRATION = "PYTEST_LLM_RUBRIC_SKIP_CALIBRATION"
+ENV_SKIP_PREFLIGHT = "PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT"
 
 
 def _resolve_model(env_var: str, default: str) -> str:
@@ -180,17 +180,17 @@ def _default_judge_llm() -> JudgeLLM:
         pytest.fail(f"Unknown PYTEST_LLM_RUBRIC_BACKEND: {backend!r}")
 
 
-def _calibrate_or_skip(judge: JudgeLLM) -> JudgeLLM:
-    """Run calibration and skip if the backend is unreliable."""
-    if os.environ.get(ENV_SKIP_CALIBRATION, "").lower() in ("1", "true", "yes"):
+def _preflight_or_skip(judge: JudgeLLM) -> JudgeLLM:
+    """Run preflight check and skip if the backend is unreliable."""
+    if os.environ.get(ENV_SKIP_PREFLIGHT, "").lower() in ("1", "true", "yes"):
         return judge
-    result = calibrate(judge)
+    result = preflight(judge)
     if not result.passed:
         failures = [d for d in result.details if not d["correct"]]
         tested = len(result.details)
         suffix = f" (stopped early after {tested}/{result.total})" if result.stopped_early else ""
         msg = (
-            f"LLM backend failed calibration ({result.correct}/{result.total}){suffix}.\n"
+            f"LLM backend failed preflight ({result.correct}/{result.total}){suffix}.\n"
             + "\n".join(
                 f"  {f['criterion']}: expected {f['expected']}, got {f['actual']}" for f in failures
             )
@@ -205,10 +205,10 @@ def judge_llm() -> JudgeLLM:
 
     Override this fixture in your conftest.py to use a custom backend.
     Note: if overriding, use scope="session" to match the default scope.
-    The backend is calibrated once per session against golden tests.
+    The backend is verified once per session via preflight golden tests.
     """
     judge = _default_judge_llm()
-    return _calibrate_or_skip(judge)
+    return _preflight_or_skip(judge)
 
 
 def pytest_configure(config: pytest.Config) -> None:
