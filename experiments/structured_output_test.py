@@ -1,4 +1,4 @@
-"""Test structured output for calibration judgments via any-llm.
+"""Test structured output for preflight judgments via any-llm.
 
 Compares free-text vs structured output (Pydantic response_format) across
 Ollama models to see if structured output improves reliability.
@@ -13,7 +13,7 @@ from typing import Any, Literal, cast
 
 from pydantic import BaseModel
 
-from pytest_llm_rubric.calibration import JUDGE_SYSTEM_PROMPT
+from pytest_llm_rubric.preflight import JUDGE_SYSTEM_PROMPT
 from pytest_llm_rubric.golden_tests import GOLDEN_TESTS
 from pytest_llm_rubric.utils import parse_ollama_host
 
@@ -70,7 +70,7 @@ def run_single_test(
         else:
             resp = cast(ChatCompletion, response)
             raw = resp.choices[0].message.content or ""
-            # Simple extraction matching calibration.py logic
+            # Simple extraction matching preflight.py logic
             import re
 
             m = re.match(r"\W*(PASS|FAIL)\b", raw.upper())
@@ -106,7 +106,7 @@ def print_results(model: str, mode: str, results: list[dict[str, Any]]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Test structured output for calibration")
+    parser = argparse.ArgumentParser(description="Test structured output for preflight")
     parser.add_argument("models", nargs="+", help="Model name(s) to test")
     parser.add_argument("-n", "--runs", type=int, default=1, help="Number of runs per model")
     parser.add_argument(

@@ -1,7 +1,7 @@
 [project]
 name = "pytest-llm-rubric"
 version = "0.1.0"
-description = "A pytest plugin for rubric-based LLM-as-judge testing with auto-discovery and calibration"
+description = "A pytest plugin for rubric-based LLM-as-judge testing with auto-discovery and preflight"
 readme = "README.md"
 license = "MIT"
 authors = [
