@@ -579,7 +579,7 @@ requires-dist = [
     { name = "any-llm-sdk", extras = ["openai"], marker = "extra == 'openai'", specifier = ">=1.12" },
     { name = "pytest", specifier = ">=8" },
 ]
-provides-extras = ["openai", "anthropic"]
+provides-extras = ["ollama", "openai", "anthropic"]
 
 [package.metadata.requires-dev]
 dev = [

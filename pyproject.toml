@@ -22,6 +22,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+ollama = []  # included in base; kept for backward compatibility
 openai = ["any-llm-sdk[openai]>=1.12"]
 anthropic = ["any-llm-sdk[anthropic]>=1.12"]
 

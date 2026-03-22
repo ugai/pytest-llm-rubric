@@ -100,13 +100,10 @@ class AnyLLMJudge:
 def _discover_ollama() -> AnyLLMJudge | None:
     """Try to connect to a local Ollama instance."""
     try:
-        import ollama as _ollama  # noqa: F811, F401
-
-        del _ollama
+        import ollama as _ollama  # noqa: F401
     except ImportError:
         warnings.warn(
-            "ollama package is not installed. "
-            "Install with: pip install 'pytest-llm-rubric[ollama]'",
+            "ollama package is not installed. Install with: pip install 'any-llm-sdk[ollama]'",
             stacklevel=2,
         )
         return None
