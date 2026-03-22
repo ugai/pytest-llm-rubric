@@ -56,10 +56,10 @@ class TestDiscoverOllama:
     def test_returns_reason_when_model_not_found(self, monkeypatch):
         """Requesting a non-existent model should return a reason, not silently substitute."""
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_OLLAMA_MODEL", "nonexistent-model-xyz")
-        result = _discover_ollama()
-        if isinstance(result, AnyLLMJudge):
-            # Ollama is not running or has the exact model — skip
-            pytest.skip("Ollama not running or model unexpectedly exists")
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"models": [{"name": "some-real-model:latest"}]}
+        with patch("httpx.get", return_value=mock_resp):
+            result = _discover_ollama()
         assert isinstance(result, str)
         assert "not found" in result
 
