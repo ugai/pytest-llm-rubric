@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from pytest_llm_rubric.calibration import GOLDEN_TESTS, JUDGE_SYSTEM_PROMPT, calibrate
+from pytest_llm_rubric.calibration import (
+    GOLDEN_TESTS,
+    JUDGE_SYSTEM_PROMPT,
+    _parse_verdict,
+    calibrate,
+)
 
 
 class FakeLLM:
@@ -13,7 +18,12 @@ class FakeLLM:
     def __init__(self, response: str):
         self._response = response
 
-    def complete(self, messages: list[dict], max_output_tokens: int = 256) -> str:
+    def complete(
+        self,
+        messages: list[dict],
+        max_output_tokens: int = 256,
+        response_format: type | None = None,
+    ) -> str:
         return self._response
 
 
@@ -25,7 +35,12 @@ class ReplayLLM:
         self._transform = transform
         self.captured_prompts: list[str] = []
 
-    def complete(self, messages: list[dict], max_output_tokens: int = 256) -> str:
+    def complete(
+        self,
+        messages: list[dict],
+        max_output_tokens: int = 256,
+        response_format: type | None = None,
+    ) -> str:
         self.captured_prompts.append(messages[0]["content"])
         expected = GOLDEN_TESTS[self._index]["expected"]
         self._index += 1
@@ -124,3 +139,36 @@ class TestCalibrate:
         result = calibrate(ReplayLLM())
         assert result.stopped_early is False
         assert len(result.details) == result.total
+
+    def test_json_verdict_accepted(self):
+        """Structured JSON output is parsed correctly."""
+        import json
+
+        def to_json(verdict: str) -> str:
+            return json.dumps({"result": verdict})
+
+        result = calibrate(ReplayLLM(transform=to_json))
+        assert result.passed is True
+
+
+class TestParseVerdict:
+    def test_json_pass(self):
+        assert _parse_verdict('{"result": "PASS"}') == "PASS"
+
+    def test_json_fail(self):
+        assert _parse_verdict('{"result": "FAIL"}') == "FAIL"
+
+    def test_freetext_pass(self):
+        assert _parse_verdict("PASS") == "PASS"
+
+    def test_freetext_fail(self):
+        assert _parse_verdict("FAIL") == "FAIL"
+
+    def test_decorated_freetext(self):
+        assert _parse_verdict("**PASS**") == "PASS"
+
+    def test_invalid(self):
+        assert _parse_verdict("JUNK").startswith("INVALID")
+
+    def test_empty(self):
+        assert _parse_verdict("").startswith("INVALID")

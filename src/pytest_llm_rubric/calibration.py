@@ -6,9 +6,12 @@ If the backend fails to match expected verdicts, it is considered unreliable.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
+
+from pydantic import BaseModel
 
 from pytest_llm_rubric.golden_tests import GOLDEN_TESTS
 
@@ -18,6 +21,26 @@ if TYPE_CHECKING:
 # Accepts "PASS" / "FAIL" after optional non-word prefix (markdown, punctuation, whitespace).
 # \b prevents partial matches like "PASSING" or "FAILED".
 _VERDICT_RE = re.compile(r"\W*(PASS|FAIL)\b")
+
+
+class Verdict(BaseModel):
+    """Structured output schema for rubric judgments."""
+
+    result: Literal["PASS", "FAIL"]
+
+
+def _parse_verdict(raw: str) -> str:
+    """Extract PASS/FAIL from a response, trying JSON first then regex."""
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict) and data.get("result") in ("PASS", "FAIL"):
+            return data["result"]
+    except (json.JSONDecodeError, TypeError):
+        pass
+    normalized = raw.upper()
+    m = _VERDICT_RE.match(normalized)
+    return m.group(1) if m else f"INVALID: {normalized[:50]}"
+
 
 JUDGE_SYSTEM_PROMPT = """\
 You are a rubric grader. You will be given a DOCUMENT and a CRITERION.
@@ -59,10 +82,10 @@ def calibrate(llm: JudgeLLM, system_prompt: str | None = None) -> CalibrationRes
         ]
         raw_response = ""
         try:
-            raw_response = llm.complete(messages, max_output_tokens=16).strip()
-            normalized = raw_response.upper()
-            m = _VERDICT_RE.match(normalized)
-            verdict = m.group(1) if m else f"INVALID: {normalized[:50]}"
+            raw_response = llm.complete(
+                messages, max_output_tokens=16, response_format=Verdict
+            ).strip()
+            verdict = _parse_verdict(raw_response)
         except Exception as e:
             verdict = f"ERROR: {e}"
 

@@ -105,6 +105,33 @@ class TestAnyLLMJudge:
 
         assert "api_base" not in mock_comp.call_args.kwargs
 
+    def test_complete_forwards_response_format(self):
+        """response_format is forwarded to any_llm.completion()."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content='{"result": "PASS"}'))]
+
+        from pydantic import BaseModel
+
+        class MyFormat(BaseModel):
+            result: str
+
+        with patch("any_llm.completion", return_value=mock_response) as mock_comp:
+            judge = AnyLLMJudge("m", "openai", api_key="k")
+            judge.complete([{"role": "user", "content": "hi"}], response_format=MyFormat)
+
+        assert mock_comp.call_args.kwargs["response_format"] is MyFormat
+
+    def test_complete_omits_none_response_format(self):
+        """response_format is not passed when None."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="PASS"))]
+
+        with patch("any_llm.completion", return_value=mock_response) as mock_comp:
+            judge = AnyLLMJudge("m", "openai", api_key="k")
+            judge.complete([{"role": "user", "content": "hi"}])
+
+        assert "response_format" not in mock_comp.call_args.kwargs
+
     def test_complete_retries_on_empty_response(self):
         """Empty responses are retried up to _MAX_EMPTY_RETRIES times."""
         empty = MagicMock(choices=[MagicMock(message=MagicMock(content=""))])
@@ -152,7 +179,7 @@ _FAKE_JUDGE_CONFTEST = """
 import pytest
 
 class FakeLLM:
-    def complete(self, messages, max_output_tokens=256):
+    def complete(self, messages, max_output_tokens=256, response_format=None):
         return "fake"
 
 @pytest.fixture(scope="session")
