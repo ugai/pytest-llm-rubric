@@ -20,6 +20,26 @@ from pytest_llm_rubric.plugin import (
 
 
 class TestDiscoverOllama:
+    def test_returns_none_when_ollama_package_missing(self, monkeypatch):
+        """Should return None with a warning when the ollama package is not importable."""
+        import builtins
+        import importlib
+
+        real_import = builtins.__import__
+
+        def _block_ollama(name, *args, **kwargs):
+            if name == "ollama":
+                raise ImportError("mocked: no ollama")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _block_ollama)
+        # Clear cached import so the guard re-runs
+        if "ollama" in importlib.sys.modules:
+            monkeypatch.delitem(importlib.sys.modules, "ollama")
+
+        with pytest.warns(match="ollama package is not installed"):
+            assert _discover_ollama() is None
+
     def test_returns_judge_when_running(self):
         judge = _discover_ollama()
         if judge is None:

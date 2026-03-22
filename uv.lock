@@ -551,16 +551,13 @@ name = "pytest-llm-rubric"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "any-llm-sdk" },
+    { name = "any-llm-sdk", extra = ["ollama"] },
     { name = "pytest" },
 ]
 
 [package.optional-dependencies]
 anthropic = [
     { name = "any-llm-sdk", extra = ["anthropic"] },
-]
-ollama = [
-    { name = "any-llm-sdk", extra = ["ollama"] },
 ]
 openai = [
     { name = "any-llm-sdk" },
@@ -577,9 +574,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "any-llm-sdk", specifier = ">=1.12" },
     { name = "any-llm-sdk", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=1.12" },
-    { name = "any-llm-sdk", extras = ["ollama"], marker = "extra == 'ollama'", specifier = ">=1.12" },
+    { name = "any-llm-sdk", extras = ["ollama"], specifier = ">=1.12" },
     { name = "any-llm-sdk", extras = ["openai"], marker = "extra == 'openai'", specifier = ">=1.12" },
     { name = "pytest", specifier = ">=8" },
 ]

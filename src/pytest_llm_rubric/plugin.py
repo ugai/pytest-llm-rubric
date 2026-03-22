@@ -98,6 +98,15 @@ class AnyLLMJudge:
 
 def _discover_ollama() -> AnyLLMJudge | None:
     """Try to connect to a local Ollama instance."""
+    try:
+        import ollama as _ollama  # noqa: F401
+    except ImportError:
+        warnings.warn(
+            "ollama package is not installed. Install with: pip install 'any-llm-sdk[ollama]'",
+            stacklevel=2,
+        )
+        return None
+
     import httpx
 
     base_url = parse_ollama_host(os.environ.get("OLLAMA_HOST"))
