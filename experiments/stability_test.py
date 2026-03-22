@@ -1,4 +1,4 @@
-"""Stability test: run calibration N times per model and report flaky tests."""
+"""Stability test: run preflight N times per model and report flaky tests."""
 
 from __future__ import annotations
 
@@ -6,13 +6,13 @@ import argparse
 import os
 import sys
 
-from pytest_llm_rubric.calibration import calibrate
+from pytest_llm_rubric.preflight import preflight
 from pytest_llm_rubric.plugin import AnyLLMJudge
 from pytest_llm_rubric.utils import parse_ollama_host
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Stability test for calibration")
+    parser = argparse.ArgumentParser(description="Stability test for preflight")
     parser.add_argument("models", nargs="+", help="Model name(s) to test")
     parser.add_argument("-n", "--runs", type=int, default=5, help="Number of runs per model")
     parser.add_argument(
@@ -31,7 +31,7 @@ def main() -> None:
 
         for run in range(1, args.runs + 1):
             judge = AnyLLMJudge(model_name, "ollama", api_base=args.base_url)
-            result = calibrate(judge)
+            result = preflight(judge)
             status = "PASS" if result.passed else "FAIL"
             print(f"  Run {run}: {status} ({result.correct}/{result.total})", end="")
 
