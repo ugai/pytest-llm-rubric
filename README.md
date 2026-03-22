@@ -190,6 +190,11 @@ uv run python -m pytest_llm_rubric.find_local_model
 
 Runs preflight against all local Ollama models and recommends the smallest one that passes.
 
+Not sure which models to pull? These tools help you find models that fit your hardware:
+
+- [canirun.ai](https://www.canirun.ai/) — browser-based hardware detection, shows which models and quantization levels your machine can handle
+- [llmfit](https://github.com/AlexsJones/llmfit) — CLI tool that scores models by fit, speed, and quality for your specific GPU/RAM
+
 ## Development
 
 <!--pytest.mark.skip-->
