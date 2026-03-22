@@ -1,18 +1,18 @@
 """pytest-llm-rubric: rubric-based LLM-as-judge testing for pytest."""
 
-# Lazy imports to avoid circular dependency between plugin.py and calibration.py.
-# calibration.py uses JudgeLLM from plugin.py under TYPE_CHECKING only;
+# Lazy imports to avoid circular dependency between plugin.py and preflight.py.
+# preflight.py uses JudgeLLM from plugin.py under TYPE_CHECKING only;
 # importing both at module level here could break if that changes.
 
 
 def __getattr__(name: str):  # noqa: ANN001
-    if name in ("CalibrationResult", "Verdict", "calibrate"):
-        from pytest_llm_rubric.calibration import CalibrationResult, Verdict, calibrate
+    if name in ("PreflightResult", "Verdict", "preflight"):
+        from pytest_llm_rubric.preflight import PreflightResult, Verdict, preflight
 
         _exports = {
-            "CalibrationResult": CalibrationResult,
+            "PreflightResult": PreflightResult,
             "Verdict": Verdict,
-            "calibrate": calibrate,
+            "preflight": preflight,
         }
         return _exports[name]
     if name in ("JudgeLLM", "AnyLLMJudge"):
@@ -25,8 +25,8 @@ def __getattr__(name: str):  # noqa: ANN001
 
 __all__ = [
     "AnyLLMJudge",
-    "CalibrationResult",
+    "PreflightResult",
     "JudgeLLM",
     "Verdict",
-    "calibrate",
+    "preflight",
 ]

@@ -1,4 +1,4 @@
-"""Calibration: verify an LLM backend can reliably judge rubric criteria.
+"""Preflight: verify an LLM backend can reliably judge rubric criteria.
 
 Runs a small set of golden test pairs (known pass/fail) against the backend.
 If the backend fails to match expected verdicts, it is considered unreliable.
@@ -50,7 +50,7 @@ Your response must be exactly one word. Do not explain."""
 
 
 @dataclass
-class CalibrationResult:
+class PreflightResult:
     passed: bool
     total: int
     correct: int
@@ -58,7 +58,7 @@ class CalibrationResult:
     stopped_early: bool = False
 
 
-def calibrate(llm: JudgeLLM, system_prompt: str | None = None) -> CalibrationResult:
+def preflight(llm: JudgeLLM, system_prompt: str | None = None) -> PreflightResult:
     """Run golden tests against the LLM and return results.
 
     Stops early on the first incorrect answer since all tests must pass.
@@ -107,7 +107,7 @@ def calibrate(llm: JudgeLLM, system_prompt: str | None = None) -> CalibrationRes
             stopped_early = len(details) < len(GOLDEN_TESTS)
             break
 
-    return CalibrationResult(
+    return PreflightResult(
         passed=correct == len(GOLDEN_TESTS),
         total=len(GOLDEN_TESTS),
         correct=correct,

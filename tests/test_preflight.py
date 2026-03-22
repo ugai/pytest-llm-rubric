@@ -1,14 +1,14 @@
-"""Tests for the calibration module."""
+"""Tests for the preflight module."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
-from pytest_llm_rubric.calibration import (
+from pytest_llm_rubric.preflight import (
     GOLDEN_TESTS,
     JUDGE_SYSTEM_PROMPT,
     _parse_verdict,
-    calibrate,
+    preflight,
 )
 
 
@@ -47,20 +47,20 @@ class ReplayLLM:
         return self._transform(expected)
 
 
-class TestCalibrate:
+class TestPreflight:
     def test_perfect_judge(self):
-        result = calibrate(ReplayLLM())
+        result = preflight(ReplayLLM())
         assert result.passed is True
         assert result.correct == result.total
 
-    def test_bad_judge_fails_calibration(self):
-        result = calibrate(FakeLLM("PASS"))
+    def test_bad_judge_fails(self):
+        result = preflight(FakeLLM("PASS"))
         assert result.passed is False
         assert result.correct < result.total
         assert result.stopped_early is True
 
     def test_result_has_details(self):
-        result = calibrate(FakeLLM("PASS"))
+        result = preflight(FakeLLM("PASS"))
         assert len(result.details) <= result.total
         assert len(result.details) > 0
         for detail in result.details:
@@ -76,18 +76,18 @@ class TestCalibrate:
         assert pass_count == fail_count
 
     def test_empty_response_is_invalid(self):
-        result = calibrate(FakeLLM(""))
+        result = preflight(FakeLLM(""))
         assert result.passed is False
         assert all(d["actual"].startswith("INVALID") for d in result.details)
 
     def test_partial_match_is_invalid(self):
         """'PASSING' should not be accepted as PASS."""
-        result = calibrate(FakeLLM("PASSING"))
+        result = preflight(FakeLLM("PASSING"))
         assert result.passed is False
         assert all(d["actual"].startswith("INVALID") for d in result.details)
 
     def test_junk_response_is_invalid(self):
-        result = calibrate(FakeLLM("JUNK"))
+        result = preflight(FakeLLM("JUNK"))
         assert result.passed is False
         assert all(d["actual"].startswith("INVALID") for d in result.details)
 
@@ -101,33 +101,33 @@ class TestCalibrate:
             counter["i"] += 1
             return template.format(verdict)
 
-        result = calibrate(ReplayLLM(transform=decorate))
+        result = preflight(ReplayLLM(transform=decorate))
         assert result.passed is True
 
     def test_failed_is_invalid(self):
         """'FAILED' should not be accepted as FAIL."""
-        result = calibrate(FakeLLM("FAILED"))
+        result = preflight(FakeLLM("FAILED"))
         assert result.passed is False
         assert all(d["actual"].startswith("INVALID") for d in result.details)
 
     def test_custom_system_prompt(self):
-        """calibrate() uses the custom system_prompt when provided."""
+        """preflight() uses the custom system_prompt when provided."""
         llm = ReplayLLM()
         custom = "You are a custom judge."
-        result = calibrate(llm, system_prompt=custom)
+        result = preflight(llm, system_prompt=custom)
         assert result.passed is True
         assert llm.captured_prompts[0] == custom
 
     def test_default_system_prompt(self):
-        """calibrate() uses JUDGE_SYSTEM_PROMPT when system_prompt is None."""
+        """preflight() uses JUDGE_SYSTEM_PROMPT when system_prompt is None."""
         llm = ReplayLLM()
-        result = calibrate(llm)
+        result = preflight(llm)
         assert result.passed is True
         assert llm.captured_prompts[0] == JUDGE_SYSTEM_PROMPT
 
     def test_early_stop_on_first_failure(self):
-        """Calibration stops at the first incorrect answer."""
-        result = calibrate(FakeLLM("FAIL"))
+        """Preflight stops at the first incorrect answer."""
+        result = preflight(FakeLLM("FAIL"))
         # FakeLLM("FAIL") gets the first test wrong (expected PASS),
         # so it should stop after 1 test.
         assert result.stopped_early is True
@@ -136,7 +136,7 @@ class TestCalibrate:
 
     def test_no_early_stop_on_perfect(self):
         """Perfect judge runs all tests without early stopping."""
-        result = calibrate(ReplayLLM())
+        result = preflight(ReplayLLM())
         assert result.stopped_early is False
         assert len(result.details) == result.total
 
@@ -147,7 +147,7 @@ class TestCalibrate:
         def to_json(verdict: str) -> str:
             return json.dumps({"result": verdict})
 
-        result = calibrate(ReplayLLM(transform=to_json))
+        result = preflight(ReplayLLM(transform=to_json))
         assert result.passed is True
 
 

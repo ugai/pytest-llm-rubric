@@ -55,8 +55,8 @@ def test_mentions_deadline(judge_llm):
 ## Execution Flow
 
 1. **Discover** — auto-detect available backends based on installed extras and env vars
-2. **Calibrate** — verify the discovered backend can reliably judge PASS/FAIL before exposing it as `judge_llm` (skippable)
-3. **Provide or skip** — expose the `judge_llm` session fixture on success, or skip dependent tests if no backend is found or calibration fails
+2. **Preflight** — verify the discovered backend can reliably judge PASS/FAIL before exposing it as `judge_llm` (skippable)
+3. **Provide or skip** — expose the `judge_llm` session fixture on success, or skip dependent tests if no backend is found or preflight fails
 
 Paid cloud APIs never run unless explicitly configured.
 
@@ -104,7 +104,7 @@ Each backend requires its corresponding extra:
 | `auto` | any of the above | — |
 
 `auto` tries Ollama → Anthropic → OpenAI, using the first available.
-If no backend is found or calibration fails, dependent tests are skipped (not failed).
+If no backend is found or preflight fails, dependent tests are skipped (not failed).
 
 CI example:
 
@@ -120,9 +120,9 @@ env:
 
 Override the default model per provider with `PYTEST_LLM_RUBRIC_<PROVIDER>_MODEL` (e.g. `PYTEST_LLM_RUBRIC_OLLAMA_MODEL=gpt-oss:20b`). Defaults are in [`defaults.py`](src/pytest_llm_rubric/defaults.py).
 
-### Skipping calibration
+### Skipping preflight
 
-Set `PYTEST_LLM_RUBRIC_SKIP_CALIBRATION=1` to bypass the built-in golden tests.
+Set `PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1` to bypass the built-in golden tests.
 
 ## Markers
 
@@ -138,7 +138,7 @@ pytest -m llm_rubric        # run only LLM-judged tests
 
 LLM-based tests are inherently non-deterministic — the same input may produce different judgments across runs. This is a feature, not a bug: deterministic settings (`temperature=0`) would undermine the fuzzy semantic matching that makes this approach valuable.
 
-Calibration screens out models that are too unreliable, but borderline cases may still produce occasional flaky results. Rather than fighting non-determinism, use pytest's existing ecosystem:
+Preflight screens out models that are too unreliable, but borderline cases may still produce occasional flaky results. Rather than fighting non-determinism, use pytest's existing ecosystem:
 
 <!--pytest.mark.skip-->
 ```bash
@@ -170,13 +170,13 @@ def judge_llm():
 
 ### Custom system prompt
 
-Tweak the calibration system prompt if your model needs specific instructions to pass calibration.
+Tweak the preflight system prompt if your model needs specific instructions to pass preflight.
 
 <!--pytest.mark.skip-->
 ```python
-from pytest_llm_rubric.calibration import calibrate, JUDGE_SYSTEM_PROMPT
+from pytest_llm_rubric.preflight import preflight, JUDGE_SYSTEM_PROMPT
 
-result = calibrate(llm, system_prompt="Your custom prompt here.")
+result = preflight(llm, system_prompt="Your custom prompt here.")
 ```
 
 The default `JUDGE_SYSTEM_PROMPT` is used when `system_prompt` is omitted.
@@ -188,7 +188,7 @@ The default `JUDGE_SYSTEM_PROMPT` is used when `system_prompt` is omitted.
 uv run python -m pytest_llm_rubric.find_local_model
 ```
 
-Runs calibration against all local Ollama models and recommends the smallest one that passes.
+Runs preflight against all local Ollama models and recommends the smallest one that passes.
 
 ## Development
 

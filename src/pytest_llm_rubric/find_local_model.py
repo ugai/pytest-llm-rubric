@@ -15,8 +15,8 @@ import sys
 
 import httpx
 
-from pytest_llm_rubric.calibration import calibrate
 from pytest_llm_rubric.plugin import AnyLLMJudge
+from pytest_llm_rubric.preflight import preflight
 from pytest_llm_rubric.utils import OLLAMA_DEFAULT_HOST, OLLAMA_DEFAULT_PORT, parse_ollama_host
 
 
@@ -76,7 +76,7 @@ def find_best_local_model(
         if skipped:
             print(f"Skipped {skipped} non-generative model(s) (embedding/vision/etc.).")
 
-    print(f"Found {len(models)} model(s) in Ollama. Running calibration...\n")
+    print(f"Found {len(models)} model(s) in Ollama. Running preflight...\n")
 
     results = []
     recommended = None
@@ -89,7 +89,7 @@ def find_best_local_model(
         judge = AnyLLMJudge(name, "ollama", api_base=base_url)
 
         try:
-            result = calibrate(judge)
+            result = preflight(judge)
             label = "PASS" if result.passed else "FAIL"
             tested = len(result.details)
             early = f" stopped at {tested}/{result.total}" if result.stopped_early else ""
@@ -112,7 +112,7 @@ def find_best_local_model(
         print("\nSet in defaults.py or environment:")
         print(f"  PYTEST_LLM_RUBRIC_MODEL={recommended}")
     else:
-        print("No model passed calibration.")
+        print("No model passed preflight.")
         print("Consider pulling a larger model: ollama pull granite4:3b")
 
 
@@ -135,7 +135,7 @@ if __name__ == "__main__":
         "--verbose",
         "-v",
         action="store_true",
-        help="Show raw LLM responses for each calibration test",
+        help="Show raw LLM responses for each preflight test",
     )
     args = parser.parse_args()
     find_best_local_model(
