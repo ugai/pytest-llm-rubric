@@ -58,6 +58,8 @@ def test_mentions_deadline(judge_llm):
 2. **Calibrate** — verify the discovered backend can reliably judge PASS/FAIL before exposing it as `judge_llm` (skippable)
 3. **Provide or skip** — expose the `judge_llm` session fixture on success, or skip dependent tests if no backend is found or calibration fails
 
+Paid cloud APIs never run unless explicitly configured.
+
 ## Example: Policy Document Checks
 
 Verify that each policy document semantically expresses required rules.
@@ -74,7 +76,7 @@ REQUIRED_RULES = [
     "Third-party integrations require security review",
 ]
 
-# @pytest.mark.flaky(reruns=2)  # pip install pytest-rerunfailures (recommended)
+# @pytest.mark.flaky(reruns=2)  # requires `pytest-rerunfailures` (recommended)
 @pytest.mark.parametrize("doc", POLICY_DOCS)
 @pytest.mark.parametrize("rule", REQUIRED_RULES)
 def test_policy_expresses_rule(judge_llm: JudgeLLM, doc, rule):
