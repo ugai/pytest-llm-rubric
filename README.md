@@ -201,7 +201,7 @@ Not sure which models to pull? These tools help you find models that fit your ha
 ```bash
 git clone https://github.com/ugai/pytest-llm-rubric.git
 cd pytest-llm-rubric
-uv sync
+uv sync --extra ollama
 uv run pre-commit install           # ruff + ty on every commit
 uv run pytest -m "not integration"  # no LLM calls, runs offline
 uv run ruff check src/ tests/
