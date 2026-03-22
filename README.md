@@ -32,9 +32,9 @@ Not a general essay grader or multi-dimensional scoring system.
 
 <!--pytest.mark.skip-->
 ```bash
-pip install pytest-llm-rubric  # or: uv add --dev pytest-llm-rubric
-ollama serve                   # start Ollama (if not already running)
-ollama pull granite4:3b        # any chat model works
+pip install pytest-llm-rubric[ollama]  # or: uv add --dev "pytest-llm-rubric[ollama]"
+ollama serve                           # start Ollama (if not already running)
+ollama pull gpt-oss:20b               # any chat model works
 ```
 
 ### Minimal Test
@@ -54,12 +54,9 @@ def test_mentions_deadline(judge_llm):
 
 ## Execution Flow
 
-1. **Discover** — find an available LLM backend (local Ollama by default)
-2. **Calibrate** — run 12 golden tests to verify reliable PASS/FAIL judgment (skippable)
-3. **Provide** — expose the `judge_llm` session fixture on success
-4. **Skip** — skip dependent tests on backend absence or calibration failure (not fail)
-
-By default, only local Ollama is tried. Paid cloud APIs require explicit opt-in.
+1. **Discover** — auto-detect available backends based on installed extras and env vars
+2. **Calibrate** — verify the discovered backend can reliably judge PASS/FAIL before exposing it as `judge_llm` (skippable)
+3. **Provide or skip** — expose the `judge_llm` session fixture on success, or skip dependent tests if no backend is found or calibration fails
 
 ## Example: Policy Document Checks
 
@@ -70,14 +67,14 @@ import pytest
 from pathlib import Path
 from pytest_llm_rubric import JudgeLLM
 
-DOCS_DIR = Path("policies")
-POLICY_DOCS = sorted(DOCS_DIR.rglob("*.md"))
+POLICY_DOCS = sorted(Path("docs/policies").rglob("*.md"))
 REQUIRED_RULES = [
     "Personal data must be encrypted at rest",
     "Access logs are retained for at least 90 days",
     "Third-party integrations require security review",
 ]
 
+# @pytest.mark.flaky(reruns=2)  # pip install pytest-rerunfailures (recommended)
 @pytest.mark.parametrize("doc", POLICY_DOCS)
 @pytest.mark.parametrize("rule", REQUIRED_RULES)
 def test_policy_expresses_rule(judge_llm: JudgeLLM, doc, rule):
@@ -91,33 +88,39 @@ def test_policy_expresses_rule(judge_llm: JudgeLLM, doc, rule):
 
 ## Configuration
 
-| Variable | Default |
-|---|---|
-| `PYTEST_LLM_RUBRIC_BACKEND` | (empty) = Ollama only. `ollama`, `anthropic`, `openai`, `auto` |
-| `PYTEST_LLM_RUBRIC_MODEL` | Provider-specific default |
-| `PYTEST_LLM_RUBRIC_<PROVIDER>_MODEL` | Overrides `MODEL` per provider |
-| `PYTEST_LLM_RUBRIC_SKIP_CALIBRATION` | (disabled) |
+All configuration is through environment variables.
 
-Model resolution: `<PROVIDER>_MODEL` > `MODEL` > default in [`defaults.py`](src/pytest_llm_rubric/defaults.py).
+### Backend selection
 
-### Backend Behavior
+Each backend requires its corresponding extra:
 
-- **(empty)** — Ollama only. Safe default, no API costs.
-- **`auto`** — Ollama → Anthropic → OpenAI (first available)
-- **`ollama`** / **`anthropic`** / **`openai`** — use only the specified backend
+| `PYTEST_LLM_RUBRIC_BACKEND` | Extra | API key |
+|---|---|---|
+| (empty) / `ollama` | `[ollama]` | — |
+| `anthropic` | `[anthropic]` | `ANTHROPIC_API_KEY` |
+| `openai` | `[openai]` | `OPENAI_API_KEY` |
+| `auto` | any of the above | — |
 
-If no backend is available or calibration fails, dependent tests are skipped (not failed).
+`auto` tries Ollama → Anthropic → OpenAI, using the first available.
+If no backend is found or calibration fails, dependent tests are skipped (not failed).
 
-### CI
-
-Set `PYTEST_LLM_RUBRIC_BACKEND` and the matching provider credentials in your CI secrets.
+CI example:
 
 <!--pytest.mark.skip-->
 ```yaml
 env:
   PYTEST_LLM_RUBRIC_BACKEND: openai  # or: anthropic
+  PYTEST_LLM_RUBRIC_OPENAI_MODEL: gpt-5.4-mini
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
+
+### Model selection
+
+Override the default model per provider with `PYTEST_LLM_RUBRIC_<PROVIDER>_MODEL` (e.g. `PYTEST_LLM_RUBRIC_OLLAMA_MODEL=gpt-oss:20b`). Defaults are in [`defaults.py`](src/pytest_llm_rubric/defaults.py).
+
+### Skipping calibration
+
+Set `PYTEST_LLM_RUBRIC_SKIP_CALIBRATION=1` to bypass the built-in golden tests.
 
 ## Markers
 
@@ -129,15 +132,31 @@ pytest -m "not llm_rubric"  # run everything except LLM-judged tests
 pytest -m llm_rubric        # run only LLM-judged tests
 ```
 
-## Custom Backend
+## Flaky test mitigation
 
-Override the fixture for a custom LLM client or internal gateway.
+LLM-based tests are inherently non-deterministic — the same input may produce different judgments across runs. This is a feature, not a bug: deterministic settings (`temperature=0`) would undermine the fuzzy semantic matching that makes this approach valuable.
+
+Calibration screens out models that are too unreliable, but borderline cases may still produce occasional flaky results. Rather than fighting non-determinism, use pytest's existing ecosystem:
+
+<!--pytest.mark.skip-->
+```bash
+pip install pytest-rerunfailures
+pytest --reruns 2 -m llm_rubric  # rerun failed LLM tests up to 2 times
+```
+
+See the [pytest documentation on flaky tests](https://docs.pytest.org/en/stable/explanation/flaky.html) for more strategies.
+
+## Customization
+
+### Custom backend
+
+Override the `judge_llm` fixture for a custom LLM client or internal gateway.
 
 ```python
 import pytest
 
 class MyBackend:
-    def complete(self, messages, max_tokens=256):
+    def complete(self, messages, max_output_tokens=256, response_format=None):
         # Call your internal LLM gateway
         resp = requests.post("https://internal-llm.corp/v1/chat", json={"messages": messages})
         return resp.json()["content"]
@@ -147,7 +166,7 @@ def judge_llm():
     return MyBackend()
 ```
 
-## Custom System Prompt
+### Custom system prompt
 
 Tweak the calibration system prompt if your model needs specific instructions to pass calibration.
 
