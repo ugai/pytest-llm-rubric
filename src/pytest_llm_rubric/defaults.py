@@ -1,7 +1,7 @@
-"""Default models and endpoints for each provider.
+"""Default models for each built-in provider.
 
-Edit these values to change which model is used when PYTEST_LLM_RUBRIC_MODEL
-is not set. Each provider falls back to its default listed here.
+These are used when PYTEST_LLM_RUBRIC_MODEL is not set.
+Override via the environment variable rather than editing this file.
 """
 
 # Chosen for stability (5/5 preflight passes) and multilingual strength.
