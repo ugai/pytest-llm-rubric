@@ -34,7 +34,7 @@ Not a general essay grader or multi-dimensional scoring system.
 ```bash
 pip install pytest-llm-rubric          # or: uv add --dev pytest-llm-rubric
 ollama serve                           # start Ollama (if not already running)
-ollama pull gpt-oss:20b               # any chat model works
+ollama pull qwen3.5:2b                # default model (or set PYTEST_LLM_RUBRIC_MODEL)
 ```
 
 ### Minimal Test
@@ -84,13 +84,14 @@ All configuration is through environment variables.
 
 ### Provider selection
 
-| `PYTEST_LLM_RUBRIC_PROVIDER` | Extra | API key |
-|---|---|---|
-| (empty) / `ollama` | — (included) | — |
-| `anthropic` | `[anthropic]` | `ANTHROPIC_API_KEY` |
-| `openai` | `[openai]` | `OPENAI_API_KEY` |
-| `auto` | any of the above | — |
-| `<other>` (e.g. `mistral`, `groq`) | install provider SDK | provider's own env var |
+| `PYTEST_LLM_RUBRIC_PROVIDER` | Extra | API key | If unavailable |
+|---|---|---|---|
+| (empty) | — (included) | — | tests **skip** |
+| `ollama` | — (included) | — | tests **fail** |
+| `anthropic` | `[anthropic]` | `ANTHROPIC_API_KEY` | tests **fail** |
+| `openai` | `[openai]` | `OPENAI_API_KEY` | tests **fail** |
+| `auto` | any of the above | — | tests **fail** |
+| `<other>` (e.g. `mistral`, `groq`) | install provider SDK | provider's own env var | tests **fail** |
 
 `auto` tries Ollama → Anthropic → OpenAI, using the first available.
 If the default (empty) provider is unavailable or preflight fails, dependent tests are skipped. If an explicit provider is set but unavailable, tests **fail** to surface CI misconfigurations.
@@ -103,7 +104,7 @@ CI example:
 ```yaml
 env:
   PYTEST_LLM_RUBRIC_PROVIDER: openai  # or: anthropic, mistral, groq, ...
-  PYTEST_LLM_RUBRIC_MODEL: gpt-5.4-mini
+  PYTEST_LLM_RUBRIC_MODEL: gpt-5.4-nano
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
