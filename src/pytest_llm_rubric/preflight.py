@@ -29,7 +29,7 @@ class Verdict(BaseModel):
     result: Literal["PASS", "FAIL"]
 
 
-def _parse_verdict(raw: str) -> str:
+def parse_verdict(raw: str) -> str:
     """Extract PASS/FAIL from a response, trying JSON first then regex."""
     try:
         data = json.loads(raw)
@@ -85,7 +85,7 @@ def preflight(llm: JudgeLLM, system_prompt: str | None = None) -> PreflightResul
             raw_response = llm.complete(
                 messages, max_output_tokens=512, response_format=Verdict
             ).strip()
-            verdict = _parse_verdict(raw_response)
+            verdict = parse_verdict(raw_response)
         except Exception as e:
             verdict = f"ERROR: {e}"
 

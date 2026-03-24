@@ -6,13 +6,21 @@
 
 
 def __getattr__(name: str):  # noqa: ANN001
-    if name in ("PreflightResult", "Verdict", "preflight"):
-        from pytest_llm_rubric.preflight import PreflightResult, Verdict, preflight
+    if name in ("PreflightResult", "Verdict", "preflight", "parse_verdict", "JUDGE_SYSTEM_PROMPT"):
+        from pytest_llm_rubric.preflight import (
+            JUDGE_SYSTEM_PROMPT,
+            PreflightResult,
+            Verdict,
+            parse_verdict,
+            preflight,
+        )
 
         _exports = {
             "PreflightResult": PreflightResult,
             "Verdict": Verdict,
             "preflight": preflight,
+            "parse_verdict": parse_verdict,
+            "JUDGE_SYSTEM_PROMPT": JUDGE_SYSTEM_PROMPT,
         }
         return _exports[name]
     if name in ("JudgeLLM", "AnyLLMJudge"):
@@ -25,8 +33,10 @@ def __getattr__(name: str):  # noqa: ANN001
 
 __all__ = [
     "AnyLLMJudge",
-    "PreflightResult",
+    "JUDGE_SYSTEM_PROMPT",
     "JudgeLLM",
+    "PreflightResult",
     "Verdict",
+    "parse_verdict",
     "preflight",
 ]

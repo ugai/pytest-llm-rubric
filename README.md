@@ -44,12 +44,7 @@ def test_mentions_deadline(judge_llm):
     # In practice, text is usually much longer —
     # policy docs, generated reports, LLM outputs, etc.
     text = "The report is due by March 31st."
-    criterion = "The delivery deadline is mentioned."
-    response = judge_llm.complete([
-        {"role": "system", "content": "Does this text express the criterion? Reply PASS or FAIL."},
-        {"role": "user", "content": f"TEXT:\n{text}\n\nCRITERION:\n{criterion}"},
-    ])
-    assert "PASS" in response.upper()
+    assert judge_llm.judge(text, "The delivery deadline is mentioned.")
 ```
 
 ## Execution Flow
@@ -80,12 +75,7 @@ REQUIRED_RULES = [
 @pytest.mark.parametrize("doc", POLICY_DOCS)
 @pytest.mark.parametrize("rule", REQUIRED_RULES)
 def test_policy_expresses_rule(judge_llm: JudgeLLM, doc, rule):
-    text = doc.read_text()
-    response = judge_llm.complete([
-        {"role": "system", "content": "Does this document express the criterion? Reply PASS or FAIL."},
-        {"role": "user", "content": f"DOCUMENT:\n{text}\n\nCRITERION:\n{rule}"},
-    ])
-    assert "PASS" in response.upper(), f"{doc} is missing rule: {rule}"
+    assert judge_llm.judge(doc.read_text(), rule), f"{doc} is missing rule: {rule}"
 ```
 
 ## Configuration
@@ -157,8 +147,10 @@ Override the `judge_llm` fixture for a custom LLM client or internal gateway.
 
 ```python
 import pytest
+import requests
+from pytest_llm_rubric import AnyLLMJudge
 
-class MyBackend:
+class MyBackend(AnyLLMJudge):
     def complete(self, messages, max_output_tokens=256, response_format=None):
         # Call your internal LLM gateway
         resp = requests.post("https://internal-llm.corp/v1/chat", json={"messages": messages})
@@ -166,7 +158,25 @@ class MyBackend:
 
 @pytest.fixture(scope="session")
 def judge_llm():
-    return MyBackend()
+    return MyBackend("my-model", "custom")
+```
+
+Extending `AnyLLMJudge` gives you the `judge()` convenience method for free. If you prefer a standalone class, implement both `complete()` and `judge()` (see the `JudgeLLM` protocol).
+
+### Low-level API
+
+The `judge()` method covers most use cases. For full control over messages, use `complete()` directly:
+
+```python
+from pytest_llm_rubric import parse_verdict
+
+def test_custom_prompt(judge_llm):
+    response = judge_llm.complete([
+        {"role": "system", "content": "Your custom system prompt. Reply PASS or FAIL."},
+        {"role": "user", "content": f"DOCUMENT:\n{text}\n\nCRITERION:\n{criterion}"},
+    ])
+    verdict = parse_verdict(response)
+    assert verdict == "PASS"
 ```
 
 ### Custom system prompt
