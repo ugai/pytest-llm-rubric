@@ -194,6 +194,51 @@ class TestAnyLLMJudge:
         assert mock_comp.call_count == 1
 
 
+class TestJudgeMethod:
+    """Tests for AnyLLMJudge.judge() convenience method."""
+
+    def test_judge_returns_true_on_pass(self):
+        mock_response = MagicMock(choices=[MagicMock(message=MagicMock(content="PASS"))])
+        with patch("any_llm.completion", return_value=mock_response):
+            judge = AnyLLMJudge("m", "openai", api_key="k")
+            assert judge.judge("The deadline is Friday.", "mentions a deadline") is True
+
+    def test_judge_returns_false_on_fail(self):
+        mock_response = MagicMock(choices=[MagicMock(message=MagicMock(content="FAIL"))])
+        with patch("any_llm.completion", return_value=mock_response):
+            judge = AnyLLMJudge("m", "openai", api_key="k")
+            assert judge.judge("Hello world.", "mentions a deadline") is False
+
+    def test_judge_raises_on_invalid_response(self):
+        mock_response = MagicMock(choices=[MagicMock(message=MagicMock(content="JUNK"))])
+        with patch("any_llm.completion", return_value=mock_response):
+            judge = AnyLLMJudge("m", "openai", api_key="k")
+            with pytest.raises(ValueError, match="Could not parse verdict"):
+                judge.judge("doc", "criterion")
+
+    def test_judge_accepts_json_verdict(self):
+        mock_response = MagicMock(
+            choices=[MagicMock(message=MagicMock(content='{"result": "PASS"}'))]
+        )
+        with patch("any_llm.completion", return_value=mock_response):
+            judge = AnyLLMJudge("m", "openai", api_key="k")
+            assert judge.judge("doc", "criterion") is True
+
+    def test_judge_sends_system_prompt(self):
+        from pytest_llm_rubric.preflight import JUDGE_SYSTEM_PROMPT
+
+        mock_response = MagicMock(choices=[MagicMock(message=MagicMock(content="PASS"))])
+        with patch("any_llm.completion", return_value=mock_response) as mock_comp:
+            judge = AnyLLMJudge("m", "openai", api_key="k")
+            judge.judge("doc", "criterion")
+
+        messages = mock_comp.call_args.kwargs["messages"]
+        assert messages[0]["role"] == "system"
+        assert messages[0]["content"] == JUDGE_SYSTEM_PROMPT
+        assert "DOCUMENT:\ndoc" in messages[1]["content"]
+        assert "CRITERION:\ncriterion" in messages[1]["content"]
+
+
 # ---------------------------------------------------------------------------
 # Fixture tests (using pytester for isolation)
 # ---------------------------------------------------------------------------

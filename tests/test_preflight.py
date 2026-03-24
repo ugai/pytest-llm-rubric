@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pytest_llm_rubric.preflight import (
     GOLDEN_TESTS,
     JUDGE_SYSTEM_PROMPT,
-    _parse_verdict,
+    parse_verdict,
     preflight,
 )
 
@@ -153,22 +153,22 @@ class TestPreflight:
 
 class TestParseVerdict:
     def test_json_pass(self):
-        assert _parse_verdict('{"result": "PASS"}') == "PASS"
+        assert parse_verdict('{"result": "PASS"}') == "PASS"
 
     def test_json_fail(self):
-        assert _parse_verdict('{"result": "FAIL"}') == "FAIL"
+        assert parse_verdict('{"result": "FAIL"}') == "FAIL"
 
     def test_freetext_pass(self):
-        assert _parse_verdict("PASS") == "PASS"
+        assert parse_verdict("PASS") == "PASS"
 
     def test_freetext_fail(self):
-        assert _parse_verdict("FAIL") == "FAIL"
+        assert parse_verdict("FAIL") == "FAIL"
 
     def test_decorated_freetext(self):
-        assert _parse_verdict("**PASS**") == "PASS"
+        assert parse_verdict("**PASS**") == "PASS"
 
     def test_invalid(self):
-        assert _parse_verdict("JUNK").startswith("INVALID")
+        assert parse_verdict("JUNK").startswith("INVALID")
 
     def test_empty(self):
-        assert _parse_verdict("").startswith("INVALID")
+        assert parse_verdict("").startswith("INVALID")

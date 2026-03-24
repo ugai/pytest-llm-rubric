@@ -13,7 +13,7 @@ from pytest_llm_rubric.defaults import (
     OLLAMA_MODEL,
     OPENAI_MODEL,
 )
-from pytest_llm_rubric.preflight import preflight
+from pytest_llm_rubric.preflight import JUDGE_SYSTEM_PROMPT, parse_verdict, preflight
 from pytest_llm_rubric.utils import parse_ollama_host
 
 ENV_PROVIDER = "PYTEST_LLM_RUBRIC_PROVIDER"
@@ -35,6 +35,8 @@ class JudgeLLM(Protocol):
         max_output_tokens: int = 256,
         response_format: type | None = None,
     ) -> str: ...
+
+    def judge(self, document: str, criterion: str) -> bool: ...
 
 
 class AnyLLMJudge:
@@ -90,6 +92,25 @@ class AnyLLMJudge:
                     stacklevel=2,
                 )
         return ""
+
+    def judge(self, document: str, criterion: str) -> bool:
+        """Evaluate whether a document meets a criterion.
+
+        Returns True (PASS) or False (FAIL).
+        Raises ValueError if the LLM response cannot be parsed as a verdict.
+        """
+        messages = [
+            {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": f"DOCUMENT:\n{document}\n\nCRITERION:\n{criterion}",
+            },
+        ]
+        raw = self.complete(messages).strip()
+        verdict = parse_verdict(raw)
+        if verdict.startswith("INVALID"):
+            raise ValueError(f"Could not parse verdict from LLM response: {raw!r}")
+        return verdict == "PASS"
 
 
 def _discover_ollama() -> AnyLLMJudge | str:
