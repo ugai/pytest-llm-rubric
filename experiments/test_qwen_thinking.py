@@ -60,14 +60,8 @@ def run_test(label: str, *, max_tokens: int, nothink: bool) -> None:
             print(f"  expected={case['expected']:<4}  ERROR: {e}")
 
 
-# Test 1: Default (thinking enabled, max_tokens=16) — current behavior
-run_test("default (thinking, 16 tokens)", max_tokens=16, nothink=False)
+# Test 1: Default (thinking enabled, max_tokens=512) — matches preflight
+run_test("default (thinking, 512 tokens)", max_tokens=512, nothink=False)
 
-# Test 2: Thinking enabled but more tokens
-run_test("thinking + 256 tokens", max_tokens=256, nothink=False)
-
-# Test 3: Nothink + 16 tokens
-run_test("nothink + 16 tokens", max_tokens=16, nothink=True)
-
-# Test 4: Nothink + 256 tokens
-run_test("nothink + 256 tokens", max_tokens=256, nothink=True)
+# Test 2: Nothink + 512 tokens
+run_test("nothink + 512 tokens", max_tokens=512, nothink=True)

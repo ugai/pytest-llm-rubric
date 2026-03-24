@@ -16,18 +16,14 @@ from pytest_llm_rubric.defaults import (
 from pytest_llm_rubric.preflight import preflight
 from pytest_llm_rubric.utils import parse_ollama_host
 
-ENV_BACKEND = "PYTEST_LLM_RUBRIC_BACKEND"
+ENV_PROVIDER = "PYTEST_LLM_RUBRIC_PROVIDER"
 ENV_MODEL = "PYTEST_LLM_RUBRIC_MODEL"
 ENV_SKIP_PREFLIGHT = "PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT"
-ENV_OLLAMA_MODEL = "PYTEST_LLM_RUBRIC_OLLAMA_MODEL"
-ENV_ANTHROPIC_MODEL = "PYTEST_LLM_RUBRIC_ANTHROPIC_MODEL"
-ENV_ANTHROPIC_BASE_URL = "PYTEST_LLM_RUBRIC_ANTHROPIC_BASE_URL"
-ENV_OPENAI_MODEL = "PYTEST_LLM_RUBRIC_OPENAI_MODEL"
 
 
-def _resolve_model(env_var: str, default: str) -> str:
-    """Resolve model name: provider-specific env var > shared env var > default."""
-    return os.environ.get(env_var) or os.environ.get(ENV_MODEL) or default
+def _resolve_model(default: str) -> str:
+    """Resolve model name: PYTEST_LLM_RUBRIC_MODEL env var > default."""
+    return os.environ.get(ENV_MODEL) or default
 
 
 class JudgeLLM(Protocol):
@@ -117,7 +113,7 @@ def _discover_ollama() -> AnyLLMJudge | str:
         if not models:
             return "Ollama is running but has no models installed."
         available = {m["name"] for m in models}
-        requested = _resolve_model(ENV_OLLAMA_MODEL, OLLAMA_MODEL or "")
+        requested = _resolve_model(OLLAMA_MODEL or "")
         if requested and requested in available:
             model_name = requested
         elif requested and requested not in available:
@@ -140,9 +136,8 @@ def _discover_anthropic() -> AnyLLMJudge | str:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return "ANTHROPIC_API_KEY is not set."
-    model = _resolve_model(ENV_ANTHROPIC_MODEL, ANTHROPIC_MODEL)
-    api_base = os.environ.get(ENV_ANTHROPIC_BASE_URL)
-    return AnyLLMJudge(model, "anthropic", api_key=api_key, api_base=api_base)
+    model = _resolve_model(ANTHROPIC_MODEL)
+    return AnyLLMJudge(model, "anthropic", api_key=api_key)
 
 
 def _discover_openai() -> AnyLLMJudge | str:
@@ -153,46 +148,47 @@ def _discover_openai() -> AnyLLMJudge | str:
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return "OPENAI_API_KEY is not set."
-    model = _resolve_model(ENV_OPENAI_MODEL, OPENAI_MODEL)
+    model = _resolve_model(OPENAI_MODEL)
     return AnyLLMJudge(model, "openai", api_key=api_key)
 
 
 def _default_judge_llm() -> JudgeLLM:
     """Auto-discover an available LLM backend.
 
-    Controlled by PYTEST_LLM_RUBRIC_BACKEND:
+    Controlled by PYTEST_LLM_RUBRIC_PROVIDER:
       (unset)    - try Ollama only, skip if unavailable
       auto       - try Ollama → Anthropic → OpenAI; fail if none found
       ollama     - Ollama only; fail if unavailable
       anthropic  - Anthropic API only; fail if unavailable
       openai     - OpenAI API only; fail if unavailable
+      <other>    - pass provider + model to AnyLLMJudge (any-llm handles it)
 
-    Explicit backends fail (pytest.fail) instead of skip so that CI
+    Explicit providers fail (pytest.fail) instead of skip so that CI
     misconfigurations surface as errors rather than silent skips.
     """
-    backend = os.environ.get(ENV_BACKEND, "").lower()
+    provider = os.environ.get(ENV_PROVIDER, "").lower()
 
-    if backend == "openai":
+    if provider == "openai":
         result = _discover_openai()
         if isinstance(result, AnyLLMJudge):
             return result
-        pytest.fail(f"PYTEST_LLM_RUBRIC_BACKEND=openai but {result}")
+        pytest.fail(f"PYTEST_LLM_RUBRIC_PROVIDER=openai but {result}")
 
-    elif backend == "anthropic":
+    elif provider == "anthropic":
         result = _discover_anthropic()
         if isinstance(result, AnyLLMJudge):
             return result
-        pytest.fail(f"PYTEST_LLM_RUBRIC_BACKEND=anthropic but {result}")
+        pytest.fail(f"PYTEST_LLM_RUBRIC_PROVIDER=anthropic but {result}")
 
-    elif backend == "ollama" or backend == "":
+    elif provider == "ollama" or provider == "":
         result = _discover_ollama()
         if isinstance(result, AnyLLMJudge):
             return result
-        if backend == "ollama":
-            pytest.fail(f"PYTEST_LLM_RUBRIC_BACKEND=ollama but {result}")
+        if provider == "ollama":
+            pytest.fail(f"PYTEST_LLM_RUBRIC_PROVIDER=ollama but {result}")
         pytest.skip(result)
 
-    elif backend == "auto":
+    elif provider == "auto":
         reasons: list[str] = []
         for name, discover in [
             ("ollama", _discover_ollama),
@@ -203,10 +199,16 @@ def _default_judge_llm() -> JudgeLLM:
             if isinstance(result, AnyLLMJudge):
                 return result
             reasons.append(f"  {name}: {result}")
-        pytest.fail("PYTEST_LLM_RUBRIC_BACKEND=auto but no backend found.\n" + "\n".join(reasons))
+        pytest.fail("PYTEST_LLM_RUBRIC_PROVIDER=auto but no backend found.\n" + "\n".join(reasons))
 
     else:
-        pytest.fail(f"Unknown PYTEST_LLM_RUBRIC_BACKEND: {backend!r}")
+        model = os.environ.get(ENV_MODEL)
+        if not model:
+            pytest.fail(
+                f"PYTEST_LLM_RUBRIC_PROVIDER={provider!r} requires "
+                f"PYTEST_LLM_RUBRIC_MODEL to be set."
+            )
+        return AnyLLMJudge(model, provider)
 
 
 def _preflight_or_skip(judge: JudgeLLM) -> JudgeLLM:

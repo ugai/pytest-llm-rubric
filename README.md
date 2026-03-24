@@ -92,33 +92,34 @@ def test_policy_expresses_rule(judge_llm: JudgeLLM, doc, rule):
 
 All configuration is through environment variables.
 
-### Backend selection
+### Provider selection
 
-Cloud backends require their corresponding extra:
-
-| `PYTEST_LLM_RUBRIC_BACKEND` | Extra | API key |
+| `PYTEST_LLM_RUBRIC_PROVIDER` | Extra | API key |
 |---|---|---|
 | (empty) / `ollama` | — (included) | — |
 | `anthropic` | `[anthropic]` | `ANTHROPIC_API_KEY` |
 | `openai` | `[openai]` | `OPENAI_API_KEY` |
 | `auto` | any of the above | — |
+| `<other>` (e.g. `mistral`, `groq`) | install provider SDK | provider's own env var |
 
 `auto` tries Ollama → Anthropic → OpenAI, using the first available.
-If the default (empty) backend is unavailable or preflight fails, dependent tests are skipped. If an explicit backend (`ollama`, `anthropic`, `openai`, `auto`) is set but unavailable, tests **fail** to surface CI misconfigurations.
+If the default (empty) provider is unavailable or preflight fails, dependent tests are skipped. If an explicit provider is set but unavailable, tests **fail** to surface CI misconfigurations.
+
+Providers beyond the built-in three are passed through to [any-llm](https://github.com/jtsang4/any-llm), which handles API key and base URL resolution for 38+ providers.
 
 CI example:
 
 <!--pytest.mark.skip-->
 ```yaml
 env:
-  PYTEST_LLM_RUBRIC_BACKEND: openai  # or: anthropic
-  PYTEST_LLM_RUBRIC_OPENAI_MODEL: gpt-5.4-mini
+  PYTEST_LLM_RUBRIC_PROVIDER: openai  # or: anthropic, mistral, groq, ...
+  PYTEST_LLM_RUBRIC_MODEL: gpt-5.4-mini
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
 ### Model selection
 
-Override the default model per provider with `PYTEST_LLM_RUBRIC_<PROVIDER>_MODEL` (e.g. `PYTEST_LLM_RUBRIC_OLLAMA_MODEL=gpt-oss:20b`). Defaults are in [`defaults.py`](src/pytest_llm_rubric/defaults.py).
+Override the default model with `PYTEST_LLM_RUBRIC_MODEL`. Curated provider defaults are in [`defaults.py`](src/pytest_llm_rubric/defaults.py). Passthrough providers (`mistral`, `groq`, etc.) require `PYTEST_LLM_RUBRIC_MODEL` to be set.
 
 ### Skipping preflight
 

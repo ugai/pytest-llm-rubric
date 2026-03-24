@@ -31,18 +31,17 @@ This is a pytest plugin (`pytest11` entry point) that provides `judge_llm`, a se
 
 - **`find_local_model.py`** — CLI tool that runs preflight against all local models (currently Ollama) and recommends the smallest passing one.
 
-**Backend discovery order** is controlled by `PYTEST_LLM_RUBRIC_BACKEND`:
+**Provider selection** is controlled by `PYTEST_LLM_RUBRIC_PROVIDER`:
 - Empty (default): Ollama only — safe, no API costs
 - `auto`: Ollama → Anthropic → OpenAI
-- Explicit: `ollama` / `anthropic` / `openai`
+- Curated: `ollama` / `anthropic` / `openai` — built-in discovery with API key checks and model validation
+- Any other value (e.g. `mistral`, `groq`): passed through to any-llm, which handles API keys and base URLs
 
-Anthropic is accessed via its OpenAI-compatible endpoint (`api.anthropic.com/v1`), so all three providers use `OpenAICompatibleJudge`.
-
-**Model resolution** for each provider: `PYTEST_LLM_RUBRIC_<PROVIDER>_MODEL` > `PYTEST_LLM_RUBRIC_MODEL` > default in `defaults.py`. This prevents model name collisions when `auto` mode falls through multiple providers.
+**Model resolution**: `PYTEST_LLM_RUBRIC_MODEL` > default in `defaults.py` (for curated providers). Passthrough providers require `PYTEST_LLM_RUBRIC_MODEL` to be set.
 
 ## Key Design Decisions
 
 - The `judge_llm` fixture is `scope="session"` — preflight runs once per test session.
-- `PYTEST_LLM_RUBRIC_BACKEND` defaults to empty (Ollama only) to prevent accidental API costs. Cloud APIs require explicit opt-in.
+- `PYTEST_LLM_RUBRIC_PROVIDER` defaults to empty (Ollama only) to prevent accidental API costs. Cloud APIs require explicit opt-in.
 - `max_tokens=512` for preflight calls (accommodates thinking models), `256` default for general use.
 - Preflight golden tests include "haystack" pairs (rule buried in long doc vs. similar doc without the rule) to screen out models that can only do trivial matching.
