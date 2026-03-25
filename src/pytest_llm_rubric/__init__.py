@@ -22,11 +22,13 @@ def __getattr__(name: str):  # noqa: ANN001
             "parse_verdict": parse_verdict,
             "JUDGE_SYSTEM_PROMPT": JUDGE_SYSTEM_PROMPT,
         }
+        globals().update(_exports)
         return _exports[name]
     if name in ("JudgeLLM", "AnyLLMJudge"):
         from pytest_llm_rubric.plugin import AnyLLMJudge, JudgeLLM
 
         _exports = {"JudgeLLM": JudgeLLM, "AnyLLMJudge": AnyLLMJudge}
+        globals().update(_exports)
         return _exports[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
