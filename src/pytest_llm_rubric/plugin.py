@@ -18,6 +18,8 @@ ENV_MODEL = "PYTEST_LLM_RUBRIC_MODEL"
 ENV_AUTO_MODELS = "PYTEST_LLM_RUBRIC_AUTO_MODELS"
 ENV_SKIP_PREFLIGHT = "PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT"
 
+_preflight_stash_key: pytest.StashKey[str] = pytest.StashKey()
+
 
 @functools.cache
 def _get_known_providers() -> frozenset[str]:
@@ -250,7 +252,7 @@ def _default_judge_llm(config: pytest.Config) -> JudgeLLM:
     pytest.fail(f"{raw}: {result}")
 
 
-def _preflight_or_skip(judge: JudgeLLM) -> JudgeLLM:
+def _preflight_or_skip(judge: JudgeLLM, config: pytest.Config | None = None) -> JudgeLLM:
     """Run preflight check and skip if the backend is unreliable."""
     if os.environ.get(ENV_SKIP_PREFLIGHT, "").lower() in ("1", "true", "yes"):
         return judge
@@ -270,10 +272,9 @@ def _preflight_or_skip(judge: JudgeLLM) -> JudgeLLM:
             + "\nTry a larger model, or set PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1 to bypass."
         )
         pytest.skip(msg)
-    warnings.warn(
-        f"preflight passed ({result.correct}/{result.total}) in {elapsed:.1f}s",
-        stacklevel=2,
-    )
+    summary = f"preflight passed ({result.correct}/{result.total}) in {elapsed:.1f}s"
+    if config is not None:
+        config.stash[_preflight_stash_key] = summary
     return judge
 
 
@@ -286,7 +287,7 @@ def judge_llm(request: pytest.FixtureRequest) -> JudgeLLM:
     The backend is verified once per session via preflight golden tests.
     """
     judge = _default_judge_llm(request.config)
-    return _preflight_or_skip(judge)
+    return _preflight_or_skip(judge, config=request.config)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -311,3 +312,12 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for item in items:
         if "judge_llm" in getattr(item, "fixturenames", ()):
             item.add_marker(marker)
+
+
+def pytest_terminal_summary(
+    terminalreporter: pytest.TerminalReporter, config: pytest.Config
+) -> None:
+    summary = config.stash.get(_preflight_stash_key, None)
+    if summary is not None:
+        terminalreporter.section("LLM Rubric")
+        terminalreporter.line(summary)
