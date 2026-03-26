@@ -34,7 +34,7 @@ Not a general essay grader or multi-dimensional scoring system.
 ```bash
 pip install pytest-llm-rubric          # or: uv add --dev pytest-llm-rubric
 ollama serve                           # start Ollama (if not already running)
-ollama pull qwen3.5:2b                # default model (or set PYTEST_LLM_RUBRIC_MODEL)
+ollama pull gpt-oss:20b               # default model (or set PYTEST_LLM_RUBRIC_MODEL)
 ```
 
 ### Minimal Test
@@ -112,6 +112,8 @@ env:
 
 Override the default model with `PYTEST_LLM_RUBRIC_MODEL`. Curated provider defaults are in [`defaults.py`](src/pytest_llm_rubric/defaults.py). Passthrough providers (`mistral`, `groq`, etc.) require `PYTEST_LLM_RUBRIC_MODEL` to be set.
 
+> **Pro tip:** Models with verbose reasoning traces (e.g. `qwen3.5` in thinking mode) can be much slower on PASS/FAIL tasks. `gpt-oss` is a good default — fast despite using medium-level reasoning.
+
 ### Skipping preflight
 
 Set `PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1` to bypass the built-in golden tests.
@@ -146,6 +148,7 @@ See the [pytest documentation on flaky tests](https://docs.pytest.org/en/stable/
 
 Override the `judge_llm` fixture for a custom LLM client or internal gateway.
 
+<!--pytest.mark.skip-->
 ```python
 import pytest
 import requests
@@ -164,7 +167,7 @@ def judge_llm():
 
 Extending `AnyLLMJudge` gives you the `judge()` convenience method for free. If you prefer a standalone class, implement both `complete()` and `judge()` (see the `JudgeLLM` protocol).
 
-### Low-level API
+### Message-level API
 
 The `judge()` method covers most use cases. For full control over messages, use `complete()` directly:
 
