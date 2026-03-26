@@ -148,6 +148,7 @@ See the [pytest documentation on flaky tests](https://docs.pytest.org/en/stable/
 
 Override the `judge_llm` fixture for a custom LLM client or internal gateway.
 
+<!--pytest.mark.skip-->
 ```python
 import pytest
 import requests
