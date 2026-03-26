@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import ipaddress
 import urllib.parse
+from typing import Any
+
+import httpx
 
 OLLAMA_DEFAULT_HOST = "127.0.0.1"
 OLLAMA_DEFAULT_PORT = 11434
@@ -38,3 +41,10 @@ def parse_ollama_host(host: str | None) -> str:
         return f"{scheme}://{host}:{port}/{path}"
 
     return f"{scheme}://{host}:{port}"
+
+
+def get_ollama_models(base_url: str) -> list[dict[str, Any]]:
+    """Fetch the list of locally available Ollama models."""
+    resp = httpx.get(f"{base_url}/api/tags", timeout=5)
+    resp.raise_for_status()
+    return resp.json().get("models", [])
