@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import os
+import time
 import warnings
 from typing import Any, Protocol, cast
 
@@ -253,19 +254,26 @@ def _preflight_or_skip(judge: JudgeLLM) -> JudgeLLM:
     """Run preflight check and skip if the backend is unreliable."""
     if os.environ.get(ENV_SKIP_PREFLIGHT, "").lower() in ("1", "true", "yes"):
         return judge
+    t0 = time.monotonic()
     result = preflight(judge)
+    elapsed = time.monotonic() - t0
     if not result.passed:
         failures = [d for d in result.details if not d["correct"]]
         tested = len(result.details)
         suffix = f" (stopped early after {tested}/{result.total})" if result.stopped_early else ""
         msg = (
-            f"LLM backend failed preflight ({result.correct}/{result.total}){suffix}.\n"
+            f"LLM backend failed preflight "
+            f"({result.correct}/{result.total}){suffix} in {elapsed:.1f}s.\n"
             + "\n".join(
                 f"  {f['criterion']}: expected {f['expected']}, got {f['actual']}" for f in failures
             )
             + "\nTry a larger model, or set PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1 to bypass."
         )
         pytest.skip(msg)
+    warnings.warn(
+        f"preflight passed ({result.correct}/{result.total}) in {elapsed:.1f}s",
+        stacklevel=2,
+    )
     return judge
 
 
