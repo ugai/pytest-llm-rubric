@@ -457,6 +457,72 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(passed=1)
         result.stdout.fnmatch_lines(["*cloud provider*anthropic*third-party API*"])
 
+    def test_preflight_timing_in_output(self, pytester, monkeypatch):
+        """Preflight pass message should include elapsed time in terminal summary."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
+        pytester.makeconftest("""
+import pytest
+from unittest.mock import patch
+from pytest_llm_rubric.plugin import AnyLLMJudge, _preflight_or_skip
+from pytest_llm_rubric.preflight import PreflightResult
+
+@pytest.fixture(scope="session")
+def judge_llm(request):
+    judge = AnyLLMJudge("fake", "groq")
+    fake_result = PreflightResult(
+        passed=True,
+        correct=12,
+        total=12,
+        stopped_early=False,
+        details=[],
+    )
+    with patch("pytest_llm_rubric.plugin.preflight", return_value=fake_result):
+        return _preflight_or_skip(judge, config=request.config)
+        """)
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(passed=1)
+        result.stdout.fnmatch_lines(["*LLM Rubric*", "*preflight passed*12*in*s*"])
+
+    def test_preflight_failure_timing_in_output(self, pytester, monkeypatch):
+        """Preflight failure skip message should include elapsed time."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
+        pytester.makeconftest("""
+import pytest
+from unittest.mock import patch
+from pytest_llm_rubric.plugin import AnyLLMJudge, _preflight_or_skip
+from pytest_llm_rubric.preflight import PreflightResult
+
+@pytest.fixture(scope="session")
+def judge_llm(request):
+    judge = AnyLLMJudge("fake", "groq")
+    fake_result = PreflightResult(
+        passed=False,
+        correct=4,
+        total=12,
+        stopped_early=True,
+        details=[
+            {"criterion": "test", "expected": "PASS", "actual": "FAIL", "correct": False},
+        ],
+    )
+    with patch("pytest_llm_rubric.plugin.preflight", return_value=fake_result):
+        return _preflight_or_skip(judge, config=request.config)
+        """)
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v", "-rs")
+        result.assert_outcomes(skipped=1)
+        result.stdout.fnmatch_lines(["*failed preflight*in*s*"])
+
     def test_preflight_failure_includes_action(self, pytester, monkeypatch):
         """Preflight failure message should tell the user what to do next."""
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b")
