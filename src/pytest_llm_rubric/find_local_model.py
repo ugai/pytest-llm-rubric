@@ -13,17 +13,14 @@ import argparse
 import os
 import sys
 
-import httpx
-
 from pytest_llm_rubric.plugin import AnyLLMJudge
 from pytest_llm_rubric.preflight import preflight
-from pytest_llm_rubric.utils import OLLAMA_DEFAULT_HOST, OLLAMA_DEFAULT_PORT, parse_ollama_host
-
-
-def _get_ollama_models(base_url: str) -> list[dict]:
-    resp = httpx.get(f"{base_url}/api/tags", timeout=5)
-    resp.raise_for_status()
-    return resp.json().get("models", [])
+from pytest_llm_rubric.utils import (
+    OLLAMA_DEFAULT_HOST,
+    OLLAMA_DEFAULT_PORT,
+    get_ollama_models,
+    parse_ollama_host,
+)
 
 
 def _size_label(size_bytes: int) -> str:
@@ -43,7 +40,7 @@ def find_best_local_model(
     if base_url is None:
         base_url = parse_ollama_host(os.environ.get("OLLAMA_HOST"))
     try:
-        all_models = _get_ollama_models(base_url)
+        all_models = get_ollama_models(base_url)
     except Exception as e:
         print(f"Could not connect to Ollama at {base_url}: {e}")
         sys.exit(1)
@@ -109,8 +106,8 @@ def find_best_local_model(
     print()
     if recommended:
         print(f"Recommended: {recommended} (smallest passing model)")
-        print("\nSet in defaults.py or environment:")
-        print(f"  PYTEST_LLM_RUBRIC_MODEL={recommended}")
+        print("\nSet in your environment:")
+        print(f"  PYTEST_LLM_RUBRIC_MODEL=ollama:{recommended}")
     else:
         print("No model passed preflight.")
         print("Consider pulling a larger model: ollama pull granite4:3b")

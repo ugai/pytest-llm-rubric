@@ -9,19 +9,50 @@ import pytest
 
 from pytest_llm_rubric.plugin import (
     AnyLLMJudge,
-    _discover_anthropic,
-    _discover_ollama,
-    _discover_openai,
+    _make_judge,
+    _parse_model,
 )
 
 # ---------------------------------------------------------------------------
-# Discovery tests
+# _parse_model tests
 # ---------------------------------------------------------------------------
 
 
-class TestDiscoverOllama:
-    def test_returns_reason_when_ollama_package_missing(self, monkeypatch):
-        """Should return a reason string when the ollama package is not importable."""
+class TestParseModel:
+    def test_anthropic_prefix(self):
+        assert _parse_model("anthropic:claude-haiku-4-5") == ("anthropic", "claude-haiku-4-5")
+
+    def test_ollama_prefix_with_tag(self):
+        """ollama:qwen3.5:9b → provider='ollama', model='qwen3.5:9b'."""
+        assert _parse_model("ollama:qwen3.5:9b") == ("ollama", "qwen3.5:9b")
+
+    def test_openai_prefix(self):
+        assert _parse_model("openai:gpt-4o") == ("openai", "gpt-4o")
+
+    def test_case_insensitive(self):
+        assert _parse_model("Anthropic:claude-haiku-4-5") == ("anthropic", "claude-haiku-4-5")
+
+    def test_no_colon_raises(self):
+        with pytest.raises(ValueError, match="Invalid model format"):
+            _parse_model("gpt-4o")
+
+    def test_unknown_prefix_raises(self):
+        with pytest.raises(ValueError, match="Unknown provider"):
+            _parse_model("mycompany:custom-model")
+
+    def test_bare_ollama_tag_raises(self):
+        """Bare 'qwen3.5:9b' has no known provider prefix → error."""
+        with pytest.raises(ValueError, match="Unknown provider"):
+            _parse_model("qwen3.5:9b")
+
+
+# ---------------------------------------------------------------------------
+# _make_judge tests
+# ---------------------------------------------------------------------------
+
+
+class TestMakeJudge:
+    def test_ollama_returns_reason_when_package_missing(self, monkeypatch):
         import builtins
         import importlib
 
@@ -33,61 +64,113 @@ class TestDiscoverOllama:
             return real_import(name, *args, **kwargs)
 
         monkeypatch.setattr(builtins, "__import__", _block_ollama)
-        # Clear cached import so the guard re-runs
         if "ollama" in importlib.sys.modules:
             monkeypatch.delitem(importlib.sys.modules, "ollama")
 
-        result = _discover_ollama()
+        result = _make_judge("ollama", "qwen3.5:9b")
         assert isinstance(result, str)
         assert "not installed" in result
 
-    def test_returns_judge_when_running(self):
-        result = _discover_ollama()
+    def test_ollama_returns_judge_when_running(self):
+        result = _make_judge("ollama", "")
         if isinstance(result, str):
             pytest.skip(f"Ollama is not running: {result}")
         assert isinstance(result, AnyLLMJudge)
 
-    def test_returns_reason_when_unreachable(self, monkeypatch):
+    def test_ollama_returns_reason_when_unreachable(self, monkeypatch):
         monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
-        result = _discover_ollama()
+        result = _make_judge("ollama", "qwen3.5:9b")
         assert isinstance(result, str)
         assert "Could not connect" in result
 
-    def test_returns_reason_when_model_not_found(self, monkeypatch):
-        """Requesting a non-existent model should return a reason, not silently substitute."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "nonexistent-model-xyz")
+    def test_ollama_returns_reason_when_model_not_found(self):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"models": [{"name": "some-real-model:latest"}]}
         with patch("httpx.get", return_value=mock_resp):
-            result = _discover_ollama()
+            result = _make_judge("ollama", "nonexistent-model-xyz")
         assert isinstance(result, str)
         assert "not found" in result
 
-
-class TestDiscoverAnthropic:
-    def test_returns_reason_without_key(self, monkeypatch):
+    def test_anthropic_returns_reason_without_key(self, monkeypatch):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        result = _discover_anthropic()
+        result = _make_judge("anthropic", "claude-haiku-4-5")
         assert isinstance(result, str)
         assert "ANTHROPIC_API_KEY" in result
 
-    def test_returns_judge_with_key(self, monkeypatch):
+    def test_anthropic_returns_judge_with_key(self, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        judge = _discover_anthropic()
+        judge = _make_judge("anthropic", "claude-haiku-4-5")
         assert isinstance(judge, AnyLLMJudge)
 
-
-class TestDiscoverOpenAI:
-    def test_returns_reason_without_key(self, monkeypatch):
+    def test_openai_returns_reason_without_key(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        result = _discover_openai()
+        result = _make_judge("openai", "gpt-4o")
         assert isinstance(result, str)
         assert "OPENAI_API_KEY" in result
 
-    def test_returns_judge_with_key(self, monkeypatch):
+    def test_openai_returns_judge_with_key(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        judge = _discover_openai()
+        judge = _make_judge("openai", "gpt-4o")
         assert isinstance(judge, AnyLLMJudge)
+
+    def test_passthrough_provider_returns_judge(self):
+        judge = _make_judge("groq", "llama-3.3-70b")
+        assert isinstance(judge, AnyLLMJudge)
+
+
+# ---------------------------------------------------------------------------
+# _resolve_auto_models tests
+# ---------------------------------------------------------------------------
+
+
+class TestResolveAutoModels:
+    def test_env_var_takes_priority(self, pytester, monkeypatch):
+        """PYTEST_LLM_RUBRIC_AUTO_MODELS env var wins over ini and defaults."""
+        monkeypatch.setenv(
+            "PYTEST_LLM_RUBRIC_AUTO_MODELS",
+            "anthropic:claude-haiku-4-5, openai:gpt-4o",
+        )
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "auto")
+        monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(errors=1)
+        # Should only try the two models from env var, not the defaults.
+        result.stdout.fnmatch_lines(
+            [
+                "*anthropic:claude-haiku-4-5: ANTHROPIC_API_KEY*",
+                "*openai:gpt-4o: OPENAI_API_KEY*",
+            ]
+        )
+        # Failure reasons should NOT include an ollama entry (not in the custom list).
+        result.stdout.no_fnmatch_line("*ollama:*")
+
+    def test_ini_option_over_defaults(self, pytester, monkeypatch):
+        """ini option wins over defaults.AUTO_MODELS."""
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_AUTO_MODELS", raising=False)
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "auto")
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        pytester.makeini("""
+            [pytest]
+            llm_rubric_auto_models =
+                anthropic:claude-haiku-4-5
+        """)
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(errors=1)
+        result.stdout.fnmatch_lines(["*anthropic*ANTHROPIC_API_KEY*"])
 
 
 # ---------------------------------------------------------------------------
@@ -261,31 +344,31 @@ def judge_llm():
 
 
 class TestJudgeLLMFixture:
-    def test_skip_when_no_backend(self, pytester, monkeypatch):
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_PROVIDER", "")
-        monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
-        pytester.makeconftest("")
-        pytester.makepyfile("""
-            def test_uses_judge(judge_llm):
-                assert judge_llm is not None
-        """)
-        result = pytester.runpytest_subprocess("-v", "-rs")
-        result.assert_outcomes(skipped=1)
-        result.stdout.fnmatch_lines(["*Could not connect to Ollama*"])
-
-    def test_default_backend_ignores_api_keys(self, pytester, monkeypatch):
-        """Default (empty) backend must use Ollama only, even when paid API keys are present."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_PROVIDER", "")
-        monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-should-not-be-used")
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-should-not-be-used")
+    def test_fails_when_model_not_set(self, pytester, monkeypatch):
+        """MODEL must be set — no silent default."""
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODEL", raising=False)
+        monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
         pytester.makepyfile("""
             def test_uses_judge(judge_llm):
                 assert judge_llm is not None
         """)
         result = pytester.runpytest_subprocess("-v")
-        result.assert_outcomes(skipped=1)
+        result.assert_outcomes(errors=1)
+        result.stdout.fnmatch_lines(["*PYTEST_LLM_RUBRIC_MODEL*not set*"])
+
+    def test_fails_on_invalid_model_format(self, pytester, monkeypatch):
+        """Invalid model string should produce a clear error, not a traceback."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "qwen3.5:9b")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(errors=1)
+        result.stdout.fnmatch_lines(["*Unknown provider*"])
 
     def test_override_fixture(self, pytester):
         pytester.makeconftest(_FAKE_JUDGE_CONFTEST)
@@ -298,7 +381,7 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(passed=1)
 
     def test_explicit_ollama_fails_when_unavailable(self, pytester, monkeypatch):
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_PROVIDER", "ollama")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "ollama:qwen3.5:9b")
         monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
@@ -310,7 +393,7 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(errors=1)
 
     def test_explicit_openai_fails_without_key(self, pytester, monkeypatch):
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_PROVIDER", "openai")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "openai:gpt-4o")
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
@@ -322,7 +405,7 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(errors=1)
 
     def test_explicit_anthropic_fails_without_key(self, pytester, monkeypatch):
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_PROVIDER", "anthropic")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "anthropic:claude-haiku-4-5")
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
@@ -333,9 +416,9 @@ class TestJudgeLLMFixture:
         result = pytester.runpytest_subprocess("-v")
         result.assert_outcomes(errors=1)
 
-    def test_auto_backend_fails_with_reasons(self, pytester, monkeypatch):
+    def test_auto_fails_with_reasons(self, pytester, monkeypatch):
         """Auto mode should list per-provider reasons when all backends fail."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_PROVIDER", "auto")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "auto")
         monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -349,34 +432,70 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(errors=1)
         result.stdout.fnmatch_lines(
             [
-                "*ollama: Could not connect*",
-                "*anthropic: ANTHROPIC_API_KEY*",
-                "*openai: OPENAI_API_KEY*",
+                "*ollama:*",
+                "*anthropic:*ANTHROPIC_API_KEY*",
+                "*openai:*OPENAI_API_KEY*",
             ]
         )
 
-    def test_passthrough_provider_requires_model(self, pytester, monkeypatch):
-        """Passthrough providers must have PYTEST_LLM_RUBRIC_MODEL set."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_PROVIDER", "groq")
-        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODEL", raising=False)
+    def test_auto_warns_on_cloud_fallback(self, pytester, monkeypatch):
+        """When auto falls through to a cloud provider, a warning should be emitted."""
+        monkeypatch.setenv(
+            "PYTEST_LLM_RUBRIC_AUTO_MODELS",
+            "anthropic:claude-haiku-4-5",
+        )
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "auto")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", "1")
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
         pytester.makepyfile("""
             def test_uses_judge(judge_llm):
                 assert judge_llm is not None
         """)
-        result = pytester.runpytest_subprocess("-v")
-        result.assert_outcomes(errors=1)
-        result.stdout.fnmatch_lines(["*requires*PYTEST_LLM_RUBRIC_MODEL*"])
+        result = pytester.runpytest_subprocess("-v", "-W", "all")
+        result.assert_outcomes(passed=1)
+        result.stdout.fnmatch_lines(["*cloud provider*anthropic*third-party API*"])
+
+    def test_preflight_failure_includes_action(self, pytester, monkeypatch):
+        """Preflight failure message should tell the user what to do next."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
+        # Provide a conftest that patches preflight to always fail,
+        # but lets the real _preflight_or_skip format the message.
+        pytester.makeconftest("""
+import pytest
+from unittest.mock import patch
+from pytest_llm_rubric.plugin import AnyLLMJudge, _preflight_or_skip
+from pytest_llm_rubric.preflight import PreflightResult
+
+@pytest.fixture(scope="session")
+def judge_llm():
+    judge = AnyLLMJudge("fake", "groq")
+    fake_result = PreflightResult(
+        passed=False,
+        correct=4,
+        total=12,
+        stopped_early=True,
+        details=[
+            {"criterion": "test", "expected": "PASS", "actual": "FAIL", "correct": False},
+        ],
+    )
+    with patch("pytest_llm_rubric.plugin.preflight", return_value=fake_result):
+        return _preflight_or_skip(judge)
+        """)
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v", "-rs")
+        result.assert_outcomes(skipped=1)
+        result.stdout.fnmatch_lines(["*PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT*"])
 
     def test_passthrough_provider_creates_judge(self, pytester, monkeypatch):
-        """Passthrough provider + model creates AnyLLMJudge without calling the LLM.
-
-        Groq SDK is not installed, but discovery only constructs the object.
-        SKIP_PREFLIGHT=1 avoids an actual completion() call.
-        """
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_PROVIDER", "groq")
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "llama-3.3-70b-versatile")
+        """groq:model creates AnyLLMJudge via passthrough."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b-versatile")
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", "1")
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
@@ -420,7 +539,7 @@ class TestJudgeLLMFixture:
 @pytest.mark.integration
 class TestIntegration:
     def test_ollama_complete(self):
-        result = _discover_ollama()
+        result = _make_judge("ollama", "")
         if isinstance(result, str):
             pytest.skip(f"Ollama is not running: {result}")
         judge = result
@@ -434,7 +553,7 @@ class TestIntegration:
     def test_anthropic_complete(self):
         if not os.environ.get("ANTHROPIC_API_KEY"):
             pytest.skip("ANTHROPIC_API_KEY not set")
-        result = _discover_anthropic()
+        result = _make_judge("anthropic", "claude-haiku-4-5")
         assert isinstance(result, AnyLLMJudge)
         response = result.complete(
             [
@@ -446,7 +565,7 @@ class TestIntegration:
     def test_openai_complete(self):
         if not os.environ.get("OPENAI_API_KEY"):
             pytest.skip("OPENAI_API_KEY not set")
-        result = _discover_openai()
+        result = _make_judge("openai", "gpt-5.4-nano")
         assert isinstance(result, AnyLLMJudge)
         response = result.complete(
             [

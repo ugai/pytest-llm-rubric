@@ -34,7 +34,8 @@ Not a general essay grader or multi-dimensional scoring system.
 ```bash
 pip install pytest-llm-rubric          # or: uv add --dev pytest-llm-rubric
 ollama serve                           # start Ollama (if not already running)
-ollama pull gpt-oss:20b               # default model (or set PYTEST_LLM_RUBRIC_MODEL)
+ollama pull gpt-oss:20b               # or any model you want to use
+export PYTEST_LLM_RUBRIC_MODEL="ollama:gpt-oss:20b"
 ```
 
 ### Minimal Test
@@ -49,11 +50,9 @@ def test_mentions_deadline(judge_llm):
 
 ## Execution Flow
 
-1. **Discover** — auto-detect available backends based on installed extras and env vars
-2. **Preflight** — verify the discovered backend can reliably judge PASS/FAIL before exposing it as `judge_llm` (skippable)
-3. **Provide, skip, or fail** — expose the `judge_llm` session fixture on success. If the default (empty) backend is unavailable or preflight fails, dependent tests are skipped. If an explicit backend is unavailable, tests fail
-
-Paid cloud APIs never run unless explicitly configured.
+1. **Discover** — resolve the backend from `PYTEST_LLM_RUBRIC_MODEL`
+2. **Preflight** — verify the backend can reliably judge PASS/FAIL before exposing it as `judge_llm` (skippable)
+3. **Provide, skip, or fail** — expose the `judge_llm` session fixture on success. If the backend is unavailable, tests **fail**. If preflight fails, tests are **skipped**
 
 ## Example: Policy Document Checks
 
@@ -80,37 +79,59 @@ def test_policy_expresses_rule(judge_llm: JudgeLLM, doc, rule):
 
 ## Configuration
 
-All configuration is through environment variables.
+### Model selection
 
-### Provider selection
+Set `PYTEST_LLM_RUBRIC_MODEL` to a `provider:model` string:
 
-| `PYTEST_LLM_RUBRIC_PROVIDER` | Extra | API key | If unavailable |
-|---|---|---|---|
-| (empty) | — (included) | — | tests **skip** |
-| `ollama` | — (included) | — | tests **fail** |
-| `anthropic` | `[anthropic]` | `ANTHROPIC_API_KEY` | tests **fail** |
-| `openai` | `[openai]` | `OPENAI_API_KEY` | tests **fail** |
-| `auto` | any of the above | — | tests **fail** |
-| `<other>` (e.g. `mistral`, `groq`) | install provider SDK | provider's own env var | tests **fail** |
+| `PYTEST_LLM_RUBRIC_MODEL` | Example | Notes |
+|---|---|---|
+| `ollama:<model>` | `ollama:gpt-oss:20b` | Local Ollama instance |
+| `anthropic:<model>` | `anthropic:claude-haiku-4-5` | Requires `ANTHROPIC_API_KEY` |
+| `openai:<model>` | `openai:gpt-5.4-nano` | Requires `OPENAI_API_KEY` |
+| `<provider>:<model>` | `groq:llama-3.3-70b` | Requires any-llm extra + provider SDK |
+| `auto` | — | Try each model in the auto-discovery list |
+| (unset) | — | Error — explicit configuration required |
 
-`auto` tries Ollama → Anthropic → OpenAI, using the first available.
-If the default (empty) provider is unavailable or preflight fails, dependent tests are skipped. If an explicit provider is set but unavailable, tests **fail** to surface CI misconfigurations.
-
-Providers beyond the built-in three are passed through to [any-llm](https://github.com/jtsang4/any-llm), which handles API key and base URL resolution for 38+ providers.
+The `provider:model` syntax follows the [any-llm-sdk](https://github.com/mozilla-ai/any-llm) convention (colon separator). Built-in providers are `ollama`, `anthropic`, and `openai`. Additional providers (e.g. `groq`, `mistral`) are recognised when any-llm is installed.
 
 CI example:
 
 <!--pytest.mark.skip-->
 ```yaml
 env:
-  PYTEST_LLM_RUBRIC_PROVIDER: openai  # or: anthropic, mistral, groq, ...
-  PYTEST_LLM_RUBRIC_MODEL: gpt-5.4-nano
-  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  PYTEST_LLM_RUBRIC_MODEL: anthropic:claude-haiku-4-5
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-### Model selection
+### Auto-discovery
 
-Override the default model with `PYTEST_LLM_RUBRIC_MODEL`. Curated provider defaults are in [`defaults.py`](src/pytest_llm_rubric/defaults.py). Passthrough providers (`mistral`, `groq`, etc.) require `PYTEST_LLM_RUBRIC_MODEL` to be set.
+When `PYTEST_LLM_RUBRIC_MODEL=auto`, the plugin tries each model in a configurable list until one is reachable. The list is resolved in priority order:
+
+1. **Env var** `PYTEST_LLM_RUBRIC_AUTO_MODELS` — comma-separated `provider:model` strings
+2. **pytest ini option** `llm_rubric_auto_models` — in `pyproject.toml` or `pytest.ini`
+3. **Package default** — [`defaults.py`](src/pytest_llm_rubric/defaults.py)
+
+> **Note:** The default list includes cloud providers (Anthropic, OpenAI) as fallbacks after Ollama. If their API keys are set, `auto` may incur API costs. To avoid this, set `PYTEST_LLM_RUBRIC_AUTO_MODELS` to only include providers you intend to use.
+
+<!--pytest.mark.skip-->
+```toml
+# pyproject.toml — linelist format (one entry per line)
+[tool.pytest.ini_options]
+llm_rubric_auto_models = [
+    "ollama:qwen3.5:9b",
+    "anthropic:claude-haiku-4-5",
+]
+```
+
+Or equivalently in `pytest.ini`:
+
+<!--pytest.mark.skip-->
+```ini
+[pytest]
+llm_rubric_auto_models =
+    ollama:qwen3.5:9b
+    anthropic:claude-haiku-4-5
+```
 
 > **Pro tip:** Models with verbose reasoning traces (e.g. `qwen3.5` in thinking mode) can be much slower on PASS/FAIL tasks. `gpt-oss` is a good default — fast despite using medium-level reasoning.
 
@@ -160,12 +181,13 @@ class MyBackend(AnyLLMJudge):
         resp = requests.post("https://internal-llm.corp/v1/chat", json={"messages": messages})
         return resp.json()["content"]
 
+# Override the fixture directly — no provider:model env var needed.
 @pytest.fixture(scope="session")
 def judge_llm():
-    return MyBackend("my-model", "custom")
+    return MyBackend("my-model", "internal")
 ```
 
-Extending `AnyLLMJudge` gives you the `judge()` convenience method for free. If you prefer a standalone class, implement both `complete()` and `judge()` (see the `JudgeLLM` protocol).
+Extending `AnyLLMJudge` gives you the `judge()` convenience method for free. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODEL` is not used. If you prefer a standalone class, implement both `complete()` and `judge()` (see the `JudgeLLM` protocol).
 
 ### Message-level API
 

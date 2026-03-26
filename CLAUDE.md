@@ -9,7 +9,7 @@ uv sync --extra ollama                   # Install dependencies (editable mode, 
 uv run pre-commit install                # Install pre-commit hooks (ruff + ty)
 uv run pytest -m "not integration"       # Run tests (no LLM calls)
 uv run pytest -m integration             # Run integration tests (requires Ollama / API keys)
-uv run pytest tests/test_plugin.py::TestDiscoverOllama -v  # Run a single test class
+uv run pytest tests/test_plugin.py::TestMakeJudge -v  # Run a single test class
 uv run ruff check src/ tests/            # Lint
 uv run ruff check --fix src/ tests/      # Lint with auto-fix
 uv run ruff format src/ tests/           # Format
@@ -27,21 +27,20 @@ This is a pytest plugin (`pytest11` entry point) that provides `judge_llm`, a se
 
 - **`preflight.py`** — Golden test suite (12 pairs: 6 short-form + 6 haystack) that validates whether an LLM can reliably do binary PASS/FAIL semantic judgments. Session runs preflight once; if the LLM fails, all rubric tests skip.
 
-- **`defaults.py`** — Single file for default model names and endpoints per provider. Intended to be human-editable.
+- **`defaults.py`** — `AUTO_MODELS` list of `provider:model` strings tried in order when `PYTEST_LLM_RUBRIC_MODEL=auto`. Intended to be human-editable.
 
 - **`find_local_model.py`** — CLI tool that runs preflight against all local models (currently Ollama) and recommends the smallest passing one.
 
-**Provider selection** is controlled by `PYTEST_LLM_RUBRIC_PROVIDER`:
-- Empty (default): Ollama only — safe, no API costs
-- `auto`: Ollama → Anthropic → OpenAI
-- Curated: `ollama` / `anthropic` / `openai` — built-in discovery with API key checks and model validation
-- Any other value (e.g. `mistral`, `groq`): passed through to any-llm, which handles API keys and base URLs
+**Model selection** is controlled by a single env var `PYTEST_LLM_RUBRIC_MODEL`:
+- `provider:model` (e.g. `anthropic:claude-haiku-4-5`, `ollama:qwen3.5:9b`) — direct
+- `auto` — tries each entry in `defaults.AUTO_MODELS` in order
+- Unset — error (explicit configuration required)
 
-**Model resolution**: `PYTEST_LLM_RUBRIC_MODEL` > default in `defaults.py` (for curated providers). Passthrough providers require `PYTEST_LLM_RUBRIC_MODEL` to be set.
+The `provider:model` syntax follows the any-llm-sdk convention (colon separator). The prefix before the first colon must match a known provider (built-in: `ollama`, `anthropic`, `openai`; extended via any-llm's `LLMProvider` enum for `groq`, `mistral`, etc.).
 
 ## Key Design Decisions
 
 - The `judge_llm` fixture is `scope="session"` — preflight runs once per test session.
-- `PYTEST_LLM_RUBRIC_PROVIDER` defaults to empty (Ollama only) to prevent accidental API costs. Cloud APIs require explicit opt-in.
+- `PYTEST_LLM_RUBRIC_MODEL` must be explicitly set — no silent defaults to prevent accidental API costs.
 - `max_tokens=512` for preflight calls (accommodates thinking models), `256` default for general use.
 - Preflight golden tests include "haystack" pairs (rule buried in long doc vs. similar doc without the rule) to screen out models that can only do trivial matching.
