@@ -252,7 +252,7 @@ def _default_judge_llm(config: pytest.Config) -> JudgeLLM:
     pytest.fail(f"{raw}: {result}")
 
 
-def _preflight_or_skip(judge: JudgeLLM, config: pytest.Config | None = None) -> JudgeLLM:
+def _preflight_or_skip(judge: JudgeLLM, config: pytest.Config) -> JudgeLLM:
     """Run preflight check and skip if the backend is unreliable."""
     if os.environ.get(ENV_SKIP_PREFLIGHT, "").lower() in ("1", "true", "yes"):
         return judge
@@ -273,8 +273,7 @@ def _preflight_or_skip(judge: JudgeLLM, config: pytest.Config | None = None) -> 
         )
         pytest.skip(msg)
     summary = f"preflight passed ({result.correct}/{result.total}) in {elapsed:.1f}s"
-    if config is not None:
-        config.stash[_preflight_stash_key] = summary
+    config.stash[_preflight_stash_key] = summary
     return judge
 
 
