@@ -189,6 +189,25 @@ def judge_llm():
 
 Extending `AnyLLMJudge` gives you `judge()`, `record()`, and the terminal summary for free. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODEL` is not used. If you prefer a standalone class, implement `complete()`, `judge()`, and `record()` (see the `JudgeLLM` protocol).
 
+> **Aside — AI coding assistant CLIs as backends:** Subscription users who don't have an API key can use CLI headless modes as backends. Both [Claude Code](https://claude.com/product/claude-code/) (`claude -p`) and [GitHub Copilot](https://github.com/features/copilot/cli/) (`copilot -p`) support this:
+>
+> <!--pytest.mark.skip-->
+> ```python
+> import re, subprocess
+> from pytest_llm_rubric import AnyLLMJudge
+>
+> class ClaudeCLIBackend(AnyLLMJudge):
+>     def complete(self, messages, max_output_tokens=256, response_format=None):
+>         prompt = messages[-1]["content"]
+>         result = subprocess.run(
+>             ["claude", "-p", prompt],  # or ["copilot", "-p", prompt]
+>             capture_output=True, timeout=300,
+>         )
+>         return result.stdout.decode("utf-8")
+> ```
+>
+> These are slower than direct API calls (CLI startup overhead per invocation) and subject to each subscription's fair-use limits, but they work without any additional billing setup.
+
 ### Two APIs: `judge()` and `complete()`
 
 The plugin provides two complementary ways to evaluate documents:
