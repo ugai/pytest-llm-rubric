@@ -187,7 +187,7 @@ def judge_llm():
     return MyBackend("my-model", "internal")
 ```
 
-Extending `AnyLLMJudge` gives you the `judge()` convenience method for free. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODEL` is not used. If you prefer a standalone class, implement both `complete()` and `judge()` (see the `JudgeLLM` protocol).
+Extending `AnyLLMJudge` gives you `judge()`, `record()`, and the terminal summary for free. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODEL` is not used. If you prefer a standalone class, implement `complete()`, `judge()`, and `record()` (see the `JudgeLLM` protocol).
 
 ### Message-level API
 
