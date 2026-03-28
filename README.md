@@ -189,9 +189,17 @@ def judge_llm():
 
 Extending `AnyLLMJudge` gives you `judge()`, `record()`, and the terminal summary for free. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODEL` is not used. If you prefer a standalone class, implement `complete()`, `judge()`, and `record()` (see the `JudgeLLM` protocol).
 
-### Message-level API
+### Two APIs: `judge()` and `complete()`
 
-The `judge()` method covers most use cases. For full control over messages, use `complete()` directly. Call `record()` to include the result in the terminal summary:
+The plugin provides two complementary ways to evaluate documents:
+
+| | `judge()` | `complete()` |
+|---|---|---|
+| **Use when** | Standard "does X satisfy Y" checks | Custom system prompts, multi-step verification, non-standard criteria |
+| **System prompt** | Built-in (optimized for PASS/FAIL) | You provide your own |
+| **Summary tracking** | Automatic | Call `record()` to include |
+
+Most tests start with `judge()`. Reach for `complete()` when you need a different system prompt or multi-step verification (e.g., checking a document against a rule, then verifying the rule's source).
 
 ```python
 from pytest_llm_rubric import parse_verdict
