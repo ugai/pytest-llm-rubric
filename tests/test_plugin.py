@@ -623,6 +623,144 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(passed=1, deselected=1)
 
 
+class TestRubricSummary:
+    """Tests for the LLM Rubric terminal summary."""
+
+    def _judge_conftest(self, *, verdicts: list[str]) -> str:
+        """Generate conftest where judge() returns canned PASS/FAIL verdicts."""
+        return f"""
+import pytest
+from unittest.mock import patch
+from pytest_llm_rubric.plugin import (
+    AnyLLMJudge, _preflight_or_skip, _judgments_stash_key, _model_stash_key,
+)
+from pytest_llm_rubric.preflight import PreflightResult
+
+@pytest.fixture(scope="session")
+def judge_llm(request):
+    judge = AnyLLMJudge("fake-model", "groq")
+    fake_result = PreflightResult(
+        passed=True, correct=12, total=12, stopped_early=False, details=[],
+    )
+    with patch("pytest_llm_rubric.plugin.preflight", return_value=fake_result):
+        judge = _preflight_or_skip(judge, config=request.config)
+    request.config.stash[_model_stash_key] = "groq:fake-model"
+    request.config.stash[_judgments_stash_key] = judge._judgments
+    verdicts = {verdicts!r}
+    call_count = [0]
+    def fake_complete(messages, max_output_tokens=256, response_format=None):
+        idx = call_count[0]
+        call_count[0] += 1
+        return verdicts[idx] if idx < len(verdicts) else "PASS"
+    judge.complete = fake_complete
+    return judge
+"""
+
+    def test_summary_shows_model_and_counts(self, pytester, monkeypatch):
+        """Summary should show model, preflight, and pass/fail counts."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:fake-model")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
+        pytester.makeconftest(self._judge_conftest(verdicts=["PASS", "PASS"]))
+        pytester.makepyfile("""
+            def test_one(judge_llm):
+                assert judge_llm.judge("doc", "criterion A")
+
+            def test_two(judge_llm):
+                assert judge_llm.judge("doc", "criterion B")
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(passed=2)
+        result.stdout.fnmatch_lines(
+            [
+                "*LLM Rubric*",
+                "*Model: groq:fake-model*Preflight:*",
+                "*2 passed, 0 failed*",
+            ]
+        )
+
+    def test_summary_shows_failures(self, pytester, monkeypatch):
+        """Summary should list failed judgments with criterion and node ID."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:fake-model")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
+        pytester.makeconftest(self._judge_conftest(verdicts=["PASS", "FAIL"]))
+        pytester.makepyfile("""
+            def test_pass(judge_llm):
+                assert judge_llm.judge("doc", "good criterion")
+
+            def test_fail(judge_llm):
+                result = judge_llm.judge("doc", "bad criterion")
+                assert result, "Judgment failed"
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(passed=1, failed=1)
+        result.stdout.fnmatch_lines(
+            [
+                "*1 passed, 1 failed*",
+                "*FAIL*test_fail*",
+                '*criterion: "bad criterion"*',
+            ]
+        )
+
+    def test_no_summary_without_rubric_tests(self, pytester, monkeypatch):
+        """No summary section when no rubric tests ran."""
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODEL", raising=False)
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_plain():
+                assert True
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(passed=1)
+        result.stdout.no_fnmatch_line("*LLM Rubric*")
+
+    def test_multiple_judgments_in_one_test(self, pytester, monkeypatch):
+        """Multiple judge() calls in a single test should all be recorded."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:fake-model")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
+        pytester.makeconftest(self._judge_conftest(verdicts=["PASS", "FAIL"]))
+        pytester.makepyfile("""
+            def test_multi(judge_llm):
+                r1 = judge_llm.judge("doc", "first criterion")
+                r2 = judge_llm.judge("doc", "second criterion")
+                assert r1 and r2, f"r1={r1}, r2={r2}"
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(failed=1)
+        result.stdout.fnmatch_lines(
+            [
+                "*1 passed, 1 failed*",
+                "*FAIL*test_multi*",
+                '*criterion: "second criterion"*',
+            ]
+        )
+
+    def test_record_appears_in_summary(self, pytester, monkeypatch):
+        """Manually recorded judgments via record() should appear in the summary."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:fake-model")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
+        pytester.makeconftest(self._judge_conftest(verdicts=["PASS"]))
+        pytester.makepyfile("""
+            def test_with_record(judge_llm):
+                assert judge_llm.judge("doc", "auto criterion")
+                judge_llm.record(criterion="manual criterion", passed=True)
+                judge_llm.record(criterion="manual fail", passed=False)
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(passed=1)
+        result.stdout.fnmatch_lines(
+            [
+                "*2 passed, 1 failed*",
+                "*FAIL*test_with_record*",
+                '*criterion: "manual fail"*',
+            ]
+        )
+
+
 # ---------------------------------------------------------------------------
 # Integration: actual LLM call (requires a running backend)
 # ---------------------------------------------------------------------------

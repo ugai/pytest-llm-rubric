@@ -6,6 +6,8 @@ import functools
 import os
 import time
 import warnings
+from collections.abc import Generator
+from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
 import pytest
@@ -18,7 +20,23 @@ ENV_MODEL = "PYTEST_LLM_RUBRIC_MODEL"
 ENV_AUTO_MODELS = "PYTEST_LLM_RUBRIC_AUTO_MODELS"
 ENV_SKIP_PREFLIGHT = "PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT"
 
+
+@dataclass
+class JudgmentRecord:
+    """One judge() call result, recorded for the terminal summary."""
+
+    node_id: str
+    criterion: str
+    passed: bool
+
+
 _preflight_stash_key: pytest.StashKey[str] = pytest.StashKey()
+_model_stash_key: pytest.StashKey[str] = pytest.StashKey()
+_judgments_stash_key: pytest.StashKey[list[JudgmentRecord]] = pytest.StashKey()
+
+# Set by pytest_runtest_call hook so judge() can tag results with the test node ID.
+# Not thread-safe — assumes single-process test execution (no pytest-xdist).
+_current_node_id: str = ""
 
 
 @functools.cache
@@ -74,6 +92,8 @@ class JudgeLLM(Protocol):
 
     def judge(self, document: str, criterion: str) -> bool: ...
 
+    def record(self, criterion: str, *, passed: bool) -> None: ...
+
 
 class AnyLLMJudge:
     """Judge backed by any-llm-sdk. Supports Ollama, OpenAI, Anthropic, and more."""
@@ -90,6 +110,7 @@ class AnyLLMJudge:
         self._provider = provider
         self._api_base = api_base
         self._api_key = api_key
+        self._judgments: list[JudgmentRecord] = []
 
     _MAX_EMPTY_RETRIES = 2
 
@@ -146,7 +167,21 @@ class AnyLLMJudge:
         verdict = parse_verdict(raw)
         if verdict.startswith("INVALID"):
             raise ValueError(f"Could not parse verdict from LLM response: {raw!r}")
-        return verdict == "PASS"
+        passed = verdict == "PASS"
+        self._judgments.append(
+            JudgmentRecord(node_id=_current_node_id, criterion=criterion, passed=passed)
+        )
+        return passed
+
+    def record(self, criterion: str, *, passed: bool) -> None:
+        """Manually record a judgment for the terminal summary.
+
+        Use this for verdicts obtained via ``complete()`` with custom prompts,
+        so they appear in the LLM Rubric summary alongside ``judge()`` results.
+        """
+        self._judgments.append(
+            JudgmentRecord(node_id=_current_node_id, criterion=criterion, passed=passed)
+        )
 
 
 def _make_judge(provider: str, model: str) -> AnyLLMJudge | str:
@@ -292,7 +327,11 @@ def judge_llm(request: pytest.FixtureRequest) -> JudgeLLM:
     The backend is verified once per session via preflight golden tests.
     """
     judge = _default_judge_llm(request.config)
-    return _preflight_or_skip(judge, config=request.config)
+    judge = _preflight_or_skip(judge, config=request.config)
+    if isinstance(judge, AnyLLMJudge):
+        request.config.stash[_model_stash_key] = f"{judge._provider}:{judge._model}"
+        request.config.stash[_judgments_stash_key] = judge._judgments
+    return judge
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -319,10 +358,48 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             item.add_marker(marker)
 
 
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_call(item: pytest.Item) -> Generator[None, None, None]:
+    global _current_node_id  # noqa: PLW0603
+    _current_node_id = item.nodeid
+    try:
+        return (yield)
+    finally:
+        _current_node_id = ""
+
+
 def pytest_terminal_summary(
     terminalreporter: pytest.TerminalReporter, config: pytest.Config
 ) -> None:
-    summary = config.stash.get(_preflight_stash_key, None)
-    if summary is not None:
-        terminalreporter.section("LLM Rubric")
-        terminalreporter.line(summary)
+    preflight = config.stash.get(_preflight_stash_key, None)
+    model = config.stash.get(_model_stash_key, None)
+    judgments = config.stash.get(_judgments_stash_key, None)
+
+    # Nothing to report if preflight never ran and no judgments were recorded.
+    if preflight is None and not judgments:
+        return
+
+    terminalreporter.section("LLM Rubric")
+
+    # Header: model + preflight
+    header_parts: list[str] = []
+    if model is not None:
+        header_parts.append(f"Model: {model}")
+    if preflight is not None:
+        header_parts.append(f"Preflight: {preflight}")
+    if header_parts:
+        terminalreporter.line("  ".join(header_parts))
+
+    if not judgments:
+        return
+
+    passed = sum(1 for j in judgments if j.passed)
+    failed = len(judgments) - passed
+    terminalreporter.line(f"{passed} passed, {failed} failed")
+
+    if failed:
+        terminalreporter.line("")
+        for j in judgments:
+            if not j.passed:
+                terminalreporter.line(f"  FAIL {j.node_id}")
+                terminalreporter.line(f'       criterion: "{j.criterion}"')
