@@ -90,7 +90,7 @@ Set `PYTEST_LLM_RUBRIC_MODEL` to a `provider:model` string:
 | `openai:<model>` | `openai:gpt-5.4-nano` | Requires `OPENAI_API_KEY` |
 | `<provider>:<model>` | `groq:llama-3.3-70b` | Requires any-llm extra + provider SDK |
 | `auto` | — | Try each model in the auto-discovery list |
-| (unset) | — | Error — explicit configuration required |
+| (unset) | — | Error, unless `llm_rubric_auto_models` is configured (→ auto) |
 
 The `provider:model` syntax follows the [any-llm-sdk](https://github.com/mozilla-ai/any-llm) convention (colon separator). Built-in providers are `ollama`, `anthropic`, and `openai`. Additional providers (e.g. `groq`, `mistral`) are recognised when any-llm is installed.
 
@@ -187,11 +187,11 @@ def judge_llm():
     return MyBackend("my-model", "internal")
 ```
 
-Extending `AnyLLMJudge` gives you the `judge()` convenience method for free. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODEL` is not used. If you prefer a standalone class, implement both `complete()` and `judge()` (see the `JudgeLLM` protocol).
+Extending `AnyLLMJudge` gives you `judge()`, `record()`, and the terminal summary for free. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODEL` is not used. If you prefer a standalone class, implement `complete()`, `judge()`, and `record()` (see the `JudgeLLM` protocol).
 
 ### Message-level API
 
-The `judge()` method covers most use cases. For full control over messages, use `complete()` directly:
+The `judge()` method covers most use cases. For full control over messages, use `complete()` directly. Call `record()` to include the result in the terminal summary:
 
 ```python
 from pytest_llm_rubric import parse_verdict
@@ -202,7 +202,9 @@ def test_custom_prompt(judge_llm):
         {"role": "user", "content": f"DOCUMENT:\n{text}\n\nCRITERION:\n{criterion}"},
     ])
     verdict = parse_verdict(response)
-    assert verdict == "PASS"
+    passed = verdict == "PASS"
+    judge_llm.record(criterion="my criterion", passed=passed)
+    assert passed
 ```
 
 ### Custom system prompt
