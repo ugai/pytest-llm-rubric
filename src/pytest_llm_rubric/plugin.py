@@ -217,11 +217,17 @@ def _default_judge_llm(config: pytest.Config) -> JudgeLLM:
     raw = os.environ.get(ENV_MODEL, "").strip()
 
     if not raw:
-        pytest.fail(
-            "PYTEST_LLM_RUBRIC_MODEL is not set. "
-            "Set it to 'provider:model' (e.g. 'anthropic:claude-haiku-4-5') "
-            "or 'auto' to try defaults."
-        )
+        # Fall back to auto when the user configured models via ini option.
+        ini: list[str] = config.getini("llm_rubric_auto_models")
+        if ini:
+            raw = "auto"
+        else:
+            pytest.fail(
+                "PYTEST_LLM_RUBRIC_MODEL is not set. "
+                "Set it to 'provider:model' (e.g. 'anthropic:claude-haiku-4-5'), "
+                "'auto' to try defaults, or configure llm_rubric_auto_models in "
+                "your pyproject.toml [tool.pytest.ini_options]."
+            )
 
     if raw.lower() == "auto":
         auto_models = _resolve_auto_models(config)

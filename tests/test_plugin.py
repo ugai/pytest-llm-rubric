@@ -390,6 +390,31 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(errors=1)
         result.stdout.fnmatch_lines(["*PYTEST_LLM_RUBRIC_MODEL*not set*"])
 
+    def test_falls_back_to_auto_when_ini_set(self, pytester, monkeypatch):
+        """When env var is unset but llm_rubric_auto_models is in ini, treat as auto."""
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODEL", raising=False)
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_AUTO_MODELS", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        pytester.makeini("""
+            [pytest]
+            llm_rubric_auto_models =
+                anthropic:claude-haiku-4-5
+        """)
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        # Should enter auto mode (not error about MODEL not set).
+        # It will fail because no backend is reachable, but the error should
+        # mention the auto-discovery models, not "PYTEST_LLM_RUBRIC_MODEL is not set".
+        result.assert_outcomes(errors=1)
+        result.stdout.fnmatch_lines(["*anthropic*ANTHROPIC_API_KEY*"])
+        # The failure should be "auto but no backend found", not "not set".
+        result.stdout.fnmatch_lines(["*auto but no backend found*"])
+
     def test_fails_on_invalid_model_format(self, pytester, monkeypatch):
         """Invalid model string should produce a clear error, not a traceback."""
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "qwen3.5:9b")
