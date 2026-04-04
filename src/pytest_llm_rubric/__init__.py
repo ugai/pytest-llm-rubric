@@ -6,9 +6,19 @@
 
 
 def __getattr__(name: str):  # noqa: ANN001
-    if name in ("PreflightResult", "Verdict", "preflight", "parse_verdict", "JUDGE_SYSTEM_PROMPT"):
+    if name in (
+        "GoldenTest",
+        "PreflightDetail",
+        "PreflightResult",
+        "Verdict",
+        "preflight",
+        "parse_verdict",
+        "JUDGE_SYSTEM_PROMPT",
+    ):
+        from pytest_llm_rubric.golden_tests import GoldenTest
         from pytest_llm_rubric.preflight import (
             JUDGE_SYSTEM_PROMPT,
+            PreflightDetail,
             PreflightResult,
             Verdict,
             parse_verdict,
@@ -16,6 +26,8 @@ def __getattr__(name: str):  # noqa: ANN001
         )
 
         _exports = {
+            "GoldenTest": GoldenTest,
+            "PreflightDetail": PreflightDetail,
             "PreflightResult": PreflightResult,
             "Verdict": Verdict,
             "preflight": preflight,
@@ -47,9 +59,11 @@ def __getattr__(name: str):  # noqa: ANN001
 
 __all__ = [
     "AnyLLMJudge",
+    "GoldenTest",
     "JUDGE_SYSTEM_PROMPT",
     "JudgeLLM",
     "JudgmentRecord",
+    "PreflightDetail",
     "PreflightResult",
     "Verdict",
     "get_shared_tmp",
