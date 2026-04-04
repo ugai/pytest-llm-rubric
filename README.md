@@ -35,7 +35,7 @@ Not a general essay grader or multi-dimensional scoring system.
 pip install pytest-llm-rubric          # or: uv add --dev pytest-llm-rubric
 ollama serve                           # start Ollama (if not already running)
 ollama pull gpt-oss:20b               # or any model you want to use
-export PYTEST_LLM_RUBRIC_MODEL="ollama:gpt-oss:20b"
+export PYTEST_LLM_RUBRIC_MODELS="ollama:gpt-oss:20b"
 ```
 
 ### Minimal Test
@@ -50,7 +50,7 @@ def test_mentions_deadline(judge_llm):
 
 ## Execution Flow
 
-1. **Discover** — resolve the backend from `PYTEST_LLM_RUBRIC_MODEL`
+1. **Discover** — resolve the backend from `PYTEST_LLM_RUBRIC_MODELS`
 2. **Preflight** — verify the backend can reliably judge PASS/FAIL before exposing it as `judge_llm` (skippable)
 3. **Provide, skip, or fail** — expose the `judge_llm` session fixture on success. If the backend is unavailable, tests **fail**. If preflight fails, tests are **skipped**
 
@@ -81,16 +81,17 @@ def test_policy_expresses_rule(judge_llm: JudgeLLM, doc, rule):
 
 ### Model selection
 
-Set `PYTEST_LLM_RUBRIC_MODEL` to a `provider:model` string:
+Set `PYTEST_LLM_RUBRIC_MODELS` to a `provider:model` string (or comma-separated list):
 
-| `PYTEST_LLM_RUBRIC_MODEL` | Example | Notes |
+| `PYTEST_LLM_RUBRIC_MODELS` | Example | Notes |
 |---|---|---|
 | `ollama:<model>` | `ollama:gpt-oss:20b` | Local Ollama instance |
 | `anthropic:<model>` | `anthropic:claude-haiku-4-5` | Requires `ANTHROPIC_API_KEY` |
 | `openai:<model>` | `openai:gpt-5.4-nano` | Requires `OPENAI_API_KEY` |
 | `<provider>:<model>` | `groq:llama-3.3-70b` | Requires any-llm extra + provider SDK |
-| `auto` | — | Try each model in the auto-discovery list |
-| (unset) | — | Error, unless `llm_rubric_auto_models` is configured (→ auto) |
+| comma-separated list | `ollama:gpt-oss:20b,anthropic:claude-haiku-4-5` | Try each in order |
+| `auto` | — | Try the default model list |
+| (unset) | — | Error, unless `llm_rubric_models` is configured in ini |
 
 The `provider:model` syntax follows the [any-llm-sdk](https://github.com/mozilla-ai/any-llm) convention (colon separator). Built-in providers are `ollama`, `anthropic`, and `openai`. Additional providers (e.g. `groq`, `mistral`) are recognised when any-llm is installed.
 
@@ -99,25 +100,25 @@ CI example:
 <!--pytest.mark.skip-->
 ```yaml
 env:
-  PYTEST_LLM_RUBRIC_MODEL: anthropic:claude-haiku-4-5
+  PYTEST_LLM_RUBRIC_MODELS: anthropic:claude-haiku-4-5
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-### Auto-discovery
+### Fallback list
 
-When `PYTEST_LLM_RUBRIC_MODEL=auto`, the plugin tries each model in a configurable list until one is reachable. The list is resolved in priority order:
+When multiple models are specified (comma-separated or `auto`), the plugin tries each in order until one is reachable. The model list is resolved as:
 
-1. **Env var** `PYTEST_LLM_RUBRIC_AUTO_MODELS` — comma-separated `provider:model` strings
-2. **pytest ini option** `llm_rubric_auto_models` — in `pyproject.toml` or `pytest.ini`
-3. **Package default** — [`defaults.py`](src/pytest_llm_rubric/defaults.py)
+1. **Env var** `PYTEST_LLM_RUBRIC_MODELS` — comma-separated `provider:model` strings, or `auto`
+2. **pytest ini option** `llm_rubric_models` — in `pyproject.toml` or `pytest.ini` (used when env var is unset)
+3. **`auto`** — uses the package default list in [`defaults.py`](src/pytest_llm_rubric/defaults.py)
 
-> **Note:** The default list includes cloud providers (Anthropic, OpenAI) as fallbacks after Ollama. If their API keys are set, `auto` may incur API costs. To avoid this, set `PYTEST_LLM_RUBRIC_AUTO_MODELS` to only include providers you intend to use.
+> **Note:** The default list includes cloud providers (Anthropic, OpenAI) as fallbacks after Ollama. If their API keys are set, `auto` may incur API costs. To avoid this, list only providers you intend to use.
 
 <!--pytest.mark.skip-->
 ```toml
 # pyproject.toml — linelist format (one entry per line)
 [tool.pytest.ini_options]
-llm_rubric_auto_models = [
+llm_rubric_models = [
     "ollama:qwen3.5:9b",
     "anthropic:claude-haiku-4-5",
 ]
@@ -128,7 +129,7 @@ Or equivalently in `pytest.ini`:
 <!--pytest.mark.skip-->
 ```ini
 [pytest]
-llm_rubric_auto_models =
+llm_rubric_models =
     ollama:qwen3.5:9b
     anthropic:claude-haiku-4-5
 ```
@@ -199,7 +200,7 @@ def judge_llm(request):
     return judge
 ```
 
-Extending `AnyLLMJudge` gives you `judge()`, `record()`, and the terminal summary for free. Call `register_judge()` so the terminal summary can report the model name and judgment counts. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODEL` is not used. If you prefer a standalone class, implement `complete()`, `judge()`, and `record()` (see the `JudgeLLM` protocol).
+Extending `AnyLLMJudge` gives you `judge()`, `record()`, and the terminal summary for free. Call `register_judge()` so the terminal summary can report the model name and judgment counts. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODELS` is not used. If you prefer a standalone class, implement `complete()`, `judge()`, and `record()` (see the `JudgeLLM` protocol).
 
 > **Aside — AI coding assistant CLIs as backends:** Subscription users who don't have an API key can use CLI headless modes as backends. Both [Claude Code](https://claude.com/product/claude-code/) (`claude -p`) and [GitHub Copilot](https://github.com/features/copilot/cli/) (`copilot -p`) support this:
 >

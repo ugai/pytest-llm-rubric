@@ -27,12 +27,13 @@ This is a pytest plugin (`pytest11` entry point) that provides `judge_llm`, a se
 
 - **`preflight.py`** — Golden test suite (12 pairs: 6 short-form + 6 haystack) that validates whether an LLM can reliably do binary PASS/FAIL semantic judgments. Session runs preflight once; if the LLM fails, all rubric tests skip.
 
-- **`defaults.py`** — `AUTO_MODELS` list of `provider:model` strings tried in order when `PYTEST_LLM_RUBRIC_MODEL=auto`. Intended to be human-editable.
+- **`defaults.py`** — `AUTO_MODELS` list of `provider:model` strings tried in order when `PYTEST_LLM_RUBRIC_MODELS=auto`. Intended to be human-editable.
 
 - **`find_local_model.py`** — CLI tool that runs preflight against all local models (currently Ollama) and recommends the smallest passing one.
 
-**Model selection** is controlled by a single env var `PYTEST_LLM_RUBRIC_MODEL`:
+**Model selection** is controlled by a single env var `PYTEST_LLM_RUBRIC_MODELS`:
 - `provider:model` (e.g. `anthropic:claude-haiku-4-5`, `ollama:qwen3.5:9b`) — direct
+- Comma-separated list (e.g. `ollama:gpt-oss:20b,anthropic:claude-haiku-4-5`) — try each in order
 - `auto` — tries each entry in `defaults.AUTO_MODELS` in order
 - Unset — error (explicit configuration required)
 
@@ -41,6 +42,6 @@ The `provider:model` syntax follows the any-llm-sdk convention (colon separator)
 ## Key Design Decisions
 
 - The `judge_llm` fixture is `scope="session"` — preflight runs once per test session.
-- `PYTEST_LLM_RUBRIC_MODEL` must be explicitly set — no silent defaults to prevent accidental API costs.
+- `PYTEST_LLM_RUBRIC_MODELS` must be explicitly set — no silent defaults to prevent accidental API costs.
 - `max_tokens=512` for preflight calls (accommodates thinking models), `256` default for general use.
 - Preflight golden tests include "haystack" pairs (rule buried in long doc vs. similar doc without the rule) to screen out models that can only do trivial matching.

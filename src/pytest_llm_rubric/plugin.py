@@ -19,9 +19,12 @@ from pytest_llm_rubric.defaults import AUTO_MODELS
 from pytest_llm_rubric.preflight import JUDGE_SYSTEM_PROMPT, parse_verdict, preflight
 from pytest_llm_rubric.utils import get_ollama_models, parse_ollama_host
 
-ENV_MODEL = "PYTEST_LLM_RUBRIC_MODEL"
-ENV_AUTO_MODELS = "PYTEST_LLM_RUBRIC_AUTO_MODELS"
+ENV_MODELS = "PYTEST_LLM_RUBRIC_MODELS"
 ENV_SKIP_PREFLIGHT = "PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT"
+
+_SOURCE_ENV = ENV_MODELS
+_SOURCE_INI = "llm_rubric_models (ini)"
+_SOURCE_AUTO = "auto (defaults)"
 
 
 @dataclass
@@ -299,73 +302,79 @@ def _make_judge(provider: str, model: str) -> AnyLLMJudge | str:
         return AnyLLMJudge(model, provider)
 
 
-def _resolve_auto_models(config: pytest.Config) -> list[str]:
-    """Resolve the auto-discovery model list.
+def _resolve_models(config: pytest.Config) -> tuple[str, list[str]]:
+    """Resolve the model list from env var, ini option, or ``auto``.
 
-    Priority: env var > ini option > defaults.AUTO_MODELS.
+    Returns ``(source, models)`` where *source* is a label for error messages
+    and *models* is the list of ``provider:model`` strings to try in order.
+
+    Raises ``pytest.fail`` when no configuration is found.
     """
-    env = os.environ.get(ENV_AUTO_MODELS, "").strip()
-    if env:
-        return [e.strip() for e in env.split(",") if e.strip()]
+    raw = os.environ.get(ENV_MODELS, "").strip()
 
-    ini: list[str] = config.getini("llm_rubric_auto_models")
-    if ini:
-        return ini
+    if not raw:
+        # Fall back to ini option when the env var is unset.
+        ini: list[str] = config.getini("llm_rubric_models")
+        if ini:
+            return _SOURCE_INI, ini
+        pytest.fail(
+            "PYTEST_LLM_RUBRIC_MODELS is not set. "
+            "Set it to 'provider:model' (e.g. 'anthropic:claude-haiku-4-5'), "
+            "a comma-separated list, 'auto' to try defaults, or configure "
+            "llm_rubric_models in your pyproject.toml [tool.pytest.ini_options]."
+        )
 
-    return AUTO_MODELS
+    if raw.lower() == "auto":
+        return _SOURCE_AUTO, AUTO_MODELS
+
+    entries = [e.strip() for e in raw.split(",") if e.strip()]
+    return _SOURCE_ENV, entries
 
 
 def _default_judge_llm(config: pytest.Config) -> JudgeLLM:
-    """Build an LLM judge from ``PYTEST_LLM_RUBRIC_MODEL``.
+    """Build an LLM judge from ``PYTEST_LLM_RUBRIC_MODELS``.
 
-    The env var must be one of:
-      ``provider:model``  — e.g. ``anthropic:claude-haiku-4-5``
-      ``auto``            — try each model in the auto-discovery list
+    The env var accepts:
+      ``provider:model``                  — use that backend directly
+      ``provider:m1,provider:m2,...``      — try each in order
+      ``auto``                            — try the default model list
 
-    Raises ``pytest.fail`` when the requested backend cannot be reached.
+    Raises ``pytest.fail`` when no usable backend is found.
     """
-    raw = os.environ.get(ENV_MODEL, "").strip()
+    source, models = _resolve_models(config)
 
-    if not raw:
-        # Fall back to auto when the user configured models via ini option.
-        ini: list[str] = config.getini("llm_rubric_auto_models")
-        if ini:
-            raw = "auto"
-        else:
-            pytest.fail(
-                "PYTEST_LLM_RUBRIC_MODEL is not set. "
-                "Set it to 'provider:model' (e.g. 'anthropic:claude-haiku-4-5'), "
-                "'auto' to try defaults, or configure llm_rubric_auto_models in "
-                "your pyproject.toml [tool.pytest.ini_options]."
-            )
+    if len(models) == 1 and source == _SOURCE_ENV:
+        # Single explicit model — fail immediately if unavailable.
+        try:
+            provider, model = _parse_model(models[0])
+        except ValueError as exc:
+            pytest.fail(str(exc))
+        result = _make_judge(provider, model)
+        if isinstance(result, AnyLLMJudge):
+            return result
+        pytest.fail(f"{models[0]}: {result}")
 
-    if raw.lower() == "auto":
-        auto_models = _resolve_auto_models(config)
-        reasons: list[str] = []
-        for entry in auto_models:
+    # Multiple models — try each in order, like the old "auto" behaviour.
+    reasons: list[str] = []
+    for entry in models:
+        try:
             provider, model = _parse_model(entry)
-            result = _make_judge(provider, model)
-            if isinstance(result, AnyLLMJudge):
-                if provider != "ollama":
-                    warnings.warn(
-                        f"PYTEST_LLM_RUBRIC_MODEL=auto: using cloud provider "
-                        f"'{provider}' ({model}). Test documents will be sent to "
-                        f"a third-party API. Set the model explicitly to suppress "
-                        f"this warning.",
-                        stacklevel=2,
-                    )
-                return result
-            reasons.append(f"  {entry}: {result}")
-        pytest.fail("PYTEST_LLM_RUBRIC_MODEL=auto but no backend found.\n" + "\n".join(reasons))
-
-    try:
-        provider, model = _parse_model(raw)
-    except ValueError as exc:
-        pytest.fail(str(exc))
-    result = _make_judge(provider, model)
-    if isinstance(result, AnyLLMJudge):
-        return result
-    pytest.fail(f"{raw}: {result}")
+        except ValueError as exc:
+            reasons.append(f"  {entry}: {exc}")
+            continue
+        result = _make_judge(provider, model)
+        if isinstance(result, AnyLLMJudge):
+            if provider != "ollama":
+                warnings.warn(
+                    f"PYTEST_LLM_RUBRIC_MODELS: using cloud provider "
+                    f"'{provider}' ({model}). Test documents will be sent to "
+                    f"a third-party API. Set a single model explicitly to "
+                    f"suppress this warning.",
+                    stacklevel=2,
+                )
+            return result
+        reasons.append(f"  {entry}: {result}")
+    pytest.fail(f"{source}: no backend found.\n" + "\n".join(reasons))
 
 
 # ---------------------------------------------------------------------------
@@ -389,7 +398,8 @@ def _run_preflight_check(judge: JudgeLLM) -> dict[str, Any]:
             + "\n".join(
                 f"  {f['criterion']}: expected {f['expected']}, got {f['actual']}" for f in failures
             )
-            + "\nTry a larger model, or set PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1 to bypass."
+            + "\nTry a larger model, or set "
+            "PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1 to bypass."
         )
         return {"passed": False, "summary": summary, "skip_msg": skip_msg}
     summary = f"preflight passed ({result.correct}/{result.total}) in {elapsed:.1f}s"
@@ -458,10 +468,11 @@ def judge_llm(
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addini(
-        "llm_rubric_auto_models",
+        "llm_rubric_models",
         type="linelist",
         default=[],
-        help="List of provider:model strings to try when PYTEST_LLM_RUBRIC_MODEL=auto.",
+        help="List of provider:model strings to try in order. "
+        "Used when PYTEST_LLM_RUBRIC_MODELS is unset.",
     )
 
 

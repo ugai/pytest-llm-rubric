@@ -3,8 +3,8 @@
 Each entry is a ``provider:model`` string tried in order.
 The first backend that is reachable wins.
 
-To customise, set ``PYTEST_LLM_RUBRIC_AUTO_MODELS`` (env var) or
-``llm_rubric_auto_models`` (pyproject.toml) instead of editing this file.
+To customise, set ``PYTEST_LLM_RUBRIC_MODELS`` (env var) or
+``llm_rubric_models`` (pyproject.toml) instead of editing this file.
 """
 
 AUTO_MODELS: list[str] = [

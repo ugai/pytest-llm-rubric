@@ -119,19 +119,17 @@ class TestMakeJudge:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_auto_models tests
+# _resolve_models tests
 # ---------------------------------------------------------------------------
 
 
-class TestResolveAutoModels:
-    def test_env_var_takes_priority(self, pytester, monkeypatch):
-        """PYTEST_LLM_RUBRIC_AUTO_MODELS env var wins over ini and defaults."""
+class TestResolveModels:
+    def test_comma_separated_env_var(self, pytester, monkeypatch):
+        """Comma-separated PYTEST_LLM_RUBRIC_MODELS tries each in order."""
         monkeypatch.setenv(
-            "PYTEST_LLM_RUBRIC_AUTO_MODELS",
+            "PYTEST_LLM_RUBRIC_MODELS",
             "anthropic:claude-haiku-4-5, openai:gpt-4o",
         )
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "auto")
-        monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.setenv("PYTHONUTF8", "1")
@@ -149,28 +147,9 @@ class TestResolveAutoModels:
                 "*openai:gpt-4o: OPENAI_API_KEY*",
             ]
         )
-        # Failure reasons should NOT include an ollama entry (not in the custom list).
+        # Failure reasons should NOT include an ollama entry (not in the list).
         result.stdout.no_fnmatch_line("*ollama:*")
 
-    def test_ini_option_over_defaults(self, pytester, monkeypatch):
-        """ini option wins over defaults.AUTO_MODELS."""
-        monkeypatch.delenv("PYTEST_LLM_RUBRIC_AUTO_MODELS", raising=False)
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "auto")
-        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        monkeypatch.setenv("PYTHONUTF8", "1")
-        pytester.makeini("""
-            [pytest]
-            llm_rubric_auto_models =
-                anthropic:claude-haiku-4-5
-        """)
-        pytester.makeconftest("")
-        pytester.makepyfile("""
-            def test_uses_judge(judge_llm):
-                assert judge_llm is not None
-        """)
-        result = pytester.runpytest_subprocess("-v")
-        result.assert_outcomes(errors=1)
-        result.stdout.fnmatch_lines(["*anthropic*ANTHROPIC_API_KEY*"])
 
 
 # ---------------------------------------------------------------------------
@@ -380,8 +359,8 @@ def judge_llm():
 
 class TestJudgeLLMFixture:
     def test_fails_when_model_not_set(self, pytester, monkeypatch):
-        """MODEL must be set — no silent default."""
-        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODEL", raising=False)
+        """MODELS must be set — no silent default."""
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODELS", raising=False)
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
         pytester.makepyfile("""
@@ -390,17 +369,16 @@ class TestJudgeLLMFixture:
         """)
         result = pytester.runpytest_subprocess("-v")
         result.assert_outcomes(errors=1)
-        result.stdout.fnmatch_lines(["*PYTEST_LLM_RUBRIC_MODEL*not set*"])
+        result.stdout.fnmatch_lines(["*PYTEST_LLM_RUBRIC_MODELS*not set*"])
 
-    def test_falls_back_to_auto_when_ini_set(self, pytester, monkeypatch):
-        """When env var is unset but llm_rubric_auto_models is in ini, treat as auto."""
-        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODEL", raising=False)
-        monkeypatch.delenv("PYTEST_LLM_RUBRIC_AUTO_MODELS", raising=False)
+    def test_falls_back_to_ini_when_env_unset(self, pytester, monkeypatch):
+        """When env var is unset but llm_rubric_models is in ini, use the ini list."""
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODELS", raising=False)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeini("""
             [pytest]
-            llm_rubric_auto_models =
+            llm_rubric_models =
                 anthropic:claude-haiku-4-5
         """)
         pytester.makeconftest("")
@@ -409,17 +387,15 @@ class TestJudgeLLMFixture:
                 assert judge_llm is not None
         """)
         result = pytester.runpytest_subprocess("-v")
-        # Should enter auto mode (not error about MODEL not set).
-        # It will fail because no backend is reachable, but the error should
-        # mention the auto-discovery models, not "PYTEST_LLM_RUBRIC_MODEL is not set".
+        # Should try the ini list (not error about MODELS not set).
         result.assert_outcomes(errors=1)
         result.stdout.fnmatch_lines(["*anthropic*ANTHROPIC_API_KEY*"])
-        # The failure should be "auto but no backend found", not "not set".
-        result.stdout.fnmatch_lines(["*auto but no backend found*"])
+        # The failure should mention the model, not "PYTEST_LLM_RUBRIC_MODELS is not set".
+        result.stdout.no_fnmatch_line("*PYTEST_LLM_RUBRIC_MODELS*not set*")
 
     def test_fails_on_invalid_model_format(self, pytester, monkeypatch):
         """Invalid model string should produce a clear error, not a traceback."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "qwen3.5:9b")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "qwen3.5:9b")
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
         pytester.makepyfile("""
@@ -441,7 +417,7 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(passed=1)
 
     def test_explicit_ollama_fails_when_unavailable(self, pytester, monkeypatch):
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "ollama:qwen3.5:9b")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "ollama:qwen3.5:9b")
         monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
@@ -453,7 +429,7 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(errors=1)
 
     def test_explicit_openai_fails_without_key(self, pytester, monkeypatch):
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "openai:gpt-4o")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "openai:gpt-4o")
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
@@ -465,7 +441,7 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(errors=1)
 
     def test_explicit_anthropic_fails_without_key(self, pytester, monkeypatch):
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "anthropic:claude-haiku-4-5")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "anthropic:claude-haiku-4-5")
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
@@ -478,7 +454,7 @@ class TestJudgeLLMFixture:
 
     def test_auto_fails_with_reasons(self, pytester, monkeypatch):
         """Auto mode should list per-provider reasons when all backends fail."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "auto")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "auto")
         monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -498,13 +474,13 @@ class TestJudgeLLMFixture:
             ]
         )
 
-    def test_auto_warns_on_cloud_fallback(self, pytester, monkeypatch):
-        """When auto falls through to a cloud provider, a warning should be emitted."""
+    def test_multi_model_warns_on_cloud_fallback(self, pytester, monkeypatch):
+        """Multi-model list falling through to cloud should emit a warning."""
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.setenv(
-            "PYTEST_LLM_RUBRIC_AUTO_MODELS",
-            "anthropic:claude-haiku-4-5",
+            "PYTEST_LLM_RUBRIC_MODELS",
+            "openai:gpt-fake,anthropic:claude-haiku-4-5",
         )
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "auto")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", "1")
         monkeypatch.setenv("PYTHONUTF8", "1")
@@ -518,9 +494,29 @@ class TestJudgeLLMFixture:
         result.stdout.fnmatch_lines(["*cloud provider*anthropic*third-party API*"])
         result.stdout.no_fnmatch_line("*LLM Rubric*")
 
+    def test_ini_single_cloud_model_warns(self, pytester, monkeypatch):
+        """A single cloud model from ini should still emit the cloud warning."""
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODELS", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", "1")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        pytester.makeini("""
+            [pytest]
+            llm_rubric_models =
+                anthropic:claude-haiku-4-5
+        """)
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v", "-W", "all")
+        result.assert_outcomes(passed=1)
+        result.stdout.fnmatch_lines(["*cloud provider*anthropic*third-party API*"])
+
     def test_preflight_timing_in_output(self, pytester, monkeypatch):
         """Preflight pass message should include elapsed time in terminal summary."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:llama-3.3-70b")
         monkeypatch.setenv("PYTHONUTF8", "1")
         monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
         pytester.makeconftest(
@@ -541,7 +537,7 @@ class TestJudgeLLMFixture:
 
     def test_preflight_failure_timing_in_output(self, pytester, monkeypatch):
         """Preflight failure skip message should include elapsed time."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:llama-3.3-70b")
         monkeypatch.setenv("PYTHONUTF8", "1")
         monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
         pytester.makeconftest(
@@ -565,7 +561,7 @@ class TestJudgeLLMFixture:
 
     def test_preflight_failure_includes_action(self, pytester, monkeypatch):
         """Preflight failure message should tell the user what to do next."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:llama-3.3-70b")
         monkeypatch.setenv("PYTHONUTF8", "1")
         monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
         pytester.makeconftest(
@@ -589,7 +585,7 @@ class TestJudgeLLMFixture:
 
     def test_preflight_failure_shows_terminal_summary(self, pytester, monkeypatch):
         """Preflight failure should show model and status in the LLM Rubric summary."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:llama-3.3-70b")
         monkeypatch.setenv("PYTHONUTF8", "1")
         monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
         pytester.makeconftest("""
@@ -625,7 +621,7 @@ def judge_llm(request):
 
     def test_passthrough_provider_creates_judge(self, pytester, monkeypatch):
         """groq:model creates AnyLLMJudge via passthrough."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b-versatile")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:llama-3.3-70b-versatile")
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", "1")
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
@@ -694,7 +690,7 @@ def judge_llm(request):
 
     def test_summary_shows_model_and_counts(self, pytester, monkeypatch):
         """Summary should show model, preflight, and pass/fail counts."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:fake-model")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:fake-model")
         monkeypatch.setenv("PYTHONUTF8", "1")
         monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
         pytester.makeconftest(self._judge_conftest(verdicts=["PASS", "PASS"]))
@@ -717,7 +713,7 @@ def judge_llm(request):
 
     def test_summary_shows_failures(self, pytester, monkeypatch):
         """Summary should list failed judgments with criterion and node ID."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:fake-model")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:fake-model")
         monkeypatch.setenv("PYTHONUTF8", "1")
         monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
         pytester.makeconftest(self._judge_conftest(verdicts=["PASS", "FAIL"]))
@@ -742,7 +738,7 @@ def judge_llm(request):
     def test_no_summary_without_rubric_tests(self, pytester, monkeypatch):
         """No summary section when no rubric tests ran."""
         monkeypatch.setenv("PYTHONUTF8", "1")
-        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODEL", raising=False)
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODELS", raising=False)
         pytester.makeconftest("")
         pytester.makepyfile("""
             def test_plain():
@@ -754,7 +750,7 @@ def judge_llm(request):
 
     def test_multiple_judgments_in_one_test(self, pytester, monkeypatch):
         """Multiple judge() calls in a single test should all be recorded."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:fake-model")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:fake-model")
         monkeypatch.setenv("PYTHONUTF8", "1")
         monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
         pytester.makeconftest(self._judge_conftest(verdicts=["PASS", "FAIL"]))
@@ -776,7 +772,7 @@ def judge_llm(request):
 
     def test_record_appears_in_summary(self, pytester, monkeypatch):
         """Manually recorded judgments via record() should appear in the summary."""
-        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:fake-model")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:fake-model")
         monkeypatch.setenv("PYTHONUTF8", "1")
         monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
         pytester.makeconftest(self._judge_conftest(verdicts=["PASS"]))
