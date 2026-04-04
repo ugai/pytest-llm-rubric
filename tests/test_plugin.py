@@ -585,6 +585,44 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(skipped=1)
         result.stdout.fnmatch_lines(["*PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT*"])
 
+    def test_preflight_failure_shows_terminal_summary(self, pytester, monkeypatch):
+        """Preflight failure should show model and status in the LLM Rubric summary."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
+        pytester.makeconftest("""
+import pytest
+from unittest.mock import patch
+from pytest_llm_rubric.plugin import (
+    AnyLLMJudge, _preflight_or_skip, _model_stash_key, _judgments_stash_key,
+)
+from pytest_llm_rubric.preflight import PreflightResult
+
+@pytest.fixture(scope="session")
+def judge_llm(request):
+    judge = AnyLLMJudge("llama-3.3-70b", "groq")
+    request.config.stash[_model_stash_key] = f"{judge._provider}:{judge._model}"
+    request.config.stash[_judgments_stash_key] = judge._judgments
+    fake_result = PreflightResult(
+        passed=False,
+        correct=4,
+        total=12,
+        stopped_early=True,
+        details=[{"criterion": "test", "expected": "PASS", "actual": "FAIL", "correct": False}],
+    )
+    with patch("pytest_llm_rubric.plugin.preflight", return_value=fake_result):
+        return _preflight_or_skip(judge, config=request.config)
+""")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(skipped=1)
+        result.stdout.fnmatch_lines(
+            ["*LLM Rubric*", "*Model: groq:llama-3.3-70b*Preflight: FAILED*"]
+        )
+
     def test_passthrough_provider_creates_judge(self, pytester, monkeypatch):
         """groq:model creates AnyLLMJudge via passthrough."""
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODEL", "groq:llama-3.3-70b-versatile")
