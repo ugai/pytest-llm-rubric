@@ -107,7 +107,7 @@ def find_best_local_model(
     if recommended:
         print(f"Recommended: {recommended} (smallest passing model)")
         print("\nSet in your environment:")
-        print(f"  PYTEST_LLM_RUBRIC_MODEL=ollama:{recommended}")
+        print(f"  PYTEST_LLM_RUBRIC_MODELS=ollama:{recommended}")
     else:
         print("No model passed preflight.")
         print("Consider pulling a larger model: ollama pull granite4:3b")
