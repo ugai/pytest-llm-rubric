@@ -353,7 +353,11 @@ def _default_judge_llm(config: pytest.Config) -> JudgeLLM:
     # Multiple models — try each in order, like the old "auto" behaviour.
     reasons: list[str] = []
     for entry in models:
-        provider, model = _parse_model(entry)
+        try:
+            provider, model = _parse_model(entry)
+        except ValueError as exc:
+            reasons.append(f"  {entry}: {exc}")
+            continue
         result = _make_judge(provider, model)
         if isinstance(result, AnyLLMJudge):
             if provider != "ollama":
@@ -390,7 +394,8 @@ def _run_preflight_check(judge: JudgeLLM) -> dict[str, Any]:
             + "\n".join(
                 f"  {f['criterion']}: expected {f['expected']}, got {f['actual']}" for f in failures
             )
-            + "\nTry a larger model, or set PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1 to bypass."  # noqa: E501
+            + "\nTry a larger model, or set "
+            "PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1 to bypass."
         )
         return {"passed": False, "summary": summary, "skip_msg": skip_msg}
     summary = f"preflight passed ({result.correct}/{result.total}) in {elapsed:.1f}s"

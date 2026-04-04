@@ -377,7 +377,7 @@ def judge_llm():
 
 class TestJudgeLLMFixture:
     def test_fails_when_model_not_set(self, pytester, monkeypatch):
-        """MODEL must be set — no silent default."""
+        """MODELS must be set — no silent default."""
         monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODELS", raising=False)
         monkeypatch.setenv("PYTHONUTF8", "1")
         pytester.makeconftest("")
@@ -494,10 +494,10 @@ class TestJudgeLLMFixture:
 
     def test_multi_model_warns_on_cloud_fallback(self, pytester, monkeypatch):
         """Multi-model list falling through to cloud should emit a warning."""
-        monkeypatch.setenv("OLLAMA_HOST", "http://localhost:19999")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.setenv(
             "PYTEST_LLM_RUBRIC_MODELS",
-            "ollama:nonexistent-xyz,anthropic:claude-haiku-4-5",
+            "openai:gpt-fake,anthropic:claude-haiku-4-5",
         )
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", "1")
