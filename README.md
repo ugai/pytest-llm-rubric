@@ -139,6 +139,16 @@ llm_rubric_auto_models =
 
 Set `PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1` to bypass the built-in golden tests.
 
+### pytest-xdist (experimental)
+
+The plugin is designed to work with [pytest-xdist](https://pypi.org/project/pytest-xdist/) parallel execution. Preflight runs once across workers via file lock, and each worker's judgment results are written to a shared temp directory for aggregation in the terminal summary. This has not been extensively tested yet — please report issues if you encounter problems.
+
+<!--pytest.mark.skip-->
+```bash
+pip install pytest-xdist
+pytest -n auto -m llm_rubric
+```
+
 ## Markers
 
 Tests that use the `judge_llm` fixture automatically receive the `llm_rubric` marker.
@@ -173,7 +183,7 @@ Override the `judge_llm` fixture for a custom LLM client or internal gateway.
 ```python
 import pytest
 import requests
-from pytest_llm_rubric import AnyLLMJudge
+from pytest_llm_rubric import AnyLLMJudge, register_judge
 
 class MyBackend(AnyLLMJudge):
     def complete(self, messages, max_output_tokens=256, response_format=None):
@@ -183,11 +193,13 @@ class MyBackend(AnyLLMJudge):
 
 # Override the fixture directly — no provider:model env var needed.
 @pytest.fixture(scope="session")
-def judge_llm():
-    return MyBackend("my-model", "internal")
+def judge_llm(request):
+    judge = MyBackend("my-model", "internal")
+    register_judge(request.config, judge, model="internal:my-model")
+    return judge
 ```
 
-Extending `AnyLLMJudge` gives you `judge()`, `record()`, and the terminal summary for free. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODEL` is not used. If you prefer a standalone class, implement `complete()`, `judge()`, and `record()` (see the `JudgeLLM` protocol).
+Extending `AnyLLMJudge` gives you `judge()`, `record()`, and the terminal summary for free. Call `register_judge()` so the terminal summary can report the model name and judgment counts. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODEL` is not used. If you prefer a standalone class, implement `complete()`, `judge()`, and `record()` (see the `JudgeLLM` protocol).
 
 > **Aside — AI coding assistant CLIs as backends:** Subscription users who don't have an API key can use CLI headless modes as backends. Both [Claude Code](https://claude.com/product/claude-code/) (`claude -p`) and [GitHub Copilot](https://github.com/features/copilot/cli/) (`copilot -p`) support this:
 >

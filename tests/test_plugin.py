@@ -346,11 +346,13 @@ def _preflight_conftest(
 import pytest
 from unittest.mock import patch
 from pytest_llm_rubric.plugin import AnyLLMJudge, _preflight_or_skip
+from pytest_llm_rubric import register_judge
 from pytest_llm_rubric.preflight import PreflightResult
 
 @pytest.fixture(scope="session")
 def judge_llm(request):
     judge = AnyLLMJudge("fake", "groq")
+    register_judge(request.config, judge, model="groq:fake")
     fake_result = PreflightResult(
         passed={passed},
         correct={correct},
@@ -593,16 +595,14 @@ class TestJudgeLLMFixture:
         pytester.makeconftest("""
 import pytest
 from unittest.mock import patch
-from pytest_llm_rubric.plugin import (
-    AnyLLMJudge, _preflight_or_skip, _model_stash_key, _judgments_stash_key,
-)
+from pytest_llm_rubric.plugin import AnyLLMJudge, _preflight_or_skip
+from pytest_llm_rubric import register_judge
 from pytest_llm_rubric.preflight import PreflightResult
 
 @pytest.fixture(scope="session")
 def judge_llm(request):
     judge = AnyLLMJudge("llama-3.3-70b", "groq")
-    request.config.stash[_model_stash_key] = f"{judge._provider}:{judge._model}"
-    request.config.stash[_judgments_stash_key] = judge._judgments
+    register_judge(request.config, judge, model="groq:llama-3.3-70b")
     fake_result = PreflightResult(
         passed=False,
         correct=4,
@@ -669,21 +669,19 @@ class TestRubricSummary:
         return f"""
 import pytest
 from unittest.mock import patch
-from pytest_llm_rubric.plugin import (
-    AnyLLMJudge, _preflight_or_skip, _judgments_stash_key, _model_stash_key,
-)
+from pytest_llm_rubric.plugin import AnyLLMJudge, _preflight_or_skip
+from pytest_llm_rubric import register_judge
 from pytest_llm_rubric.preflight import PreflightResult
 
 @pytest.fixture(scope="session")
 def judge_llm(request):
     judge = AnyLLMJudge("fake-model", "groq")
+    register_judge(request.config, judge, model="groq:fake-model")
     fake_result = PreflightResult(
         passed=True, correct=12, total=12, stopped_early=False, details=[],
     )
     with patch("pytest_llm_rubric.plugin.preflight", return_value=fake_result):
         judge = _preflight_or_skip(judge, config=request.config)
-    request.config.stash[_model_stash_key] = "groq:fake-model"
-    request.config.stash[_judgments_stash_key] = judge._judgments
     verdicts = {verdicts!r}
     call_count = [0]
     def fake_complete(messages, max_output_tokens=256, response_format=None):
@@ -796,6 +794,168 @@ def judge_llm(request):
                 "*FAIL*test_with_record*",
                 '*criterion: "manual fail"*',
             ]
+        )
+
+
+# ---------------------------------------------------------------------------
+# register_judge tests
+# ---------------------------------------------------------------------------
+
+
+class TestRegisterJudge:
+    def test_registers_model_and_judgments(self, pytester):
+        """register_judge should set model and judgments stash keys."""
+        pytester.makeconftest("""
+import pytest
+from pytest_llm_rubric import register_judge
+from pytest_llm_rubric.plugin import _model_stash_key, _judgments_stash_key
+
+class FakeJudge:
+    def __init__(self):
+        self._judgments = []
+    def complete(self, messages, max_output_tokens=256, response_format=None):
+        return "PASS"
+    def judge(self, document, criterion):
+        return True
+    def record(self, criterion, *, passed):
+        pass
+
+@pytest.fixture(scope="session")
+def judge_llm(request):
+    judge = FakeJudge()
+    register_judge(request.config, judge, model="custom:my-model")
+    return judge
+
+@pytest.fixture(scope="session")
+def _stash_check(request):
+    yield
+    assert request.config.stash[_model_stash_key] == "custom:my-model"
+    assert request.config.stash[_judgments_stash_key] is not None
+""")
+        pytester.makepyfile("""
+            def test_registered(judge_llm, _stash_check):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(passed=1)
+
+    def test_uses_explicit_judgments_list(self, pytester):
+        """register_judge with explicit judgments= should use that list."""
+        pytester.makeconftest("""
+import pytest
+from pytest_llm_rubric import register_judge, JudgmentRecord
+from pytest_llm_rubric.plugin import _judgments_stash_key
+
+class FakeJudge:
+    def complete(self, messages, max_output_tokens=256, response_format=None):
+        return "PASS"
+    def judge(self, document, criterion):
+        return True
+    def record(self, criterion, *, passed):
+        pass
+
+@pytest.fixture(scope="session")
+def judge_llm(request):
+    judge = FakeJudge()
+    my_list = [JudgmentRecord(node_id="test", criterion="c", passed=True)]
+    register_judge(request.config, judge, model="custom:m", judgments=my_list)
+    return judge
+
+@pytest.fixture(scope="session")
+def _stash_check(request):
+    yield
+    jl = request.config.stash[_judgments_stash_key]
+    assert len(jl) == 1
+    assert jl[0].criterion == "c"
+""")
+        pytester.makepyfile("""
+            def test_explicit(judge_llm, _stash_check):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(passed=1)
+
+    def test_custom_backend_shows_summary(self, pytester, monkeypatch):
+        """Custom backend using register_judge should appear in terminal summary."""
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        pytester.makeconftest("""
+import pytest
+from pytest_llm_rubric import register_judge, JudgmentRecord
+
+class FakeJudge:
+    def __init__(self):
+        self._judgments = []
+    def complete(self, messages, max_output_tokens=256, response_format=None):
+        return "PASS"
+    def judge(self, document, criterion):
+        self._judgments.append(
+            JudgmentRecord(node_id="", criterion=criterion, passed=True)
+        )
+        return True
+    def record(self, criterion, *, passed):
+        self._judgments.append(
+            JudgmentRecord(node_id="", criterion=criterion, passed=passed)
+        )
+
+@pytest.fixture(scope="session")
+def judge_llm(request):
+    judge = FakeJudge()
+    register_judge(request.config, judge, model="custom:my-model")
+    return judge
+""")
+        pytester.makepyfile("""
+            def test_one(judge_llm):
+                assert judge_llm.judge("doc", "criterion A")
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(passed=1)
+        result.stdout.fnmatch_lines(
+            ["*LLM Rubric*", "*Model: custom:my-model*", "*1 passed, 0 failed*"]
+        )
+
+
+# ---------------------------------------------------------------------------
+# xdist E2E test
+# ---------------------------------------------------------------------------
+
+
+class TestXdist:
+    def test_summary_aggregates_across_workers(self, pytester, monkeypatch):
+        """Judgments from multiple xdist workers should be aggregated in summary."""
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        pytester.makeconftest("""
+import pytest
+from unittest.mock import patch
+from pytest_llm_rubric.plugin import AnyLLMJudge, _preflight_or_skip, get_shared_tmp
+from pytest_llm_rubric import register_judge
+from pytest_llm_rubric.preflight import PreflightResult
+
+@pytest.fixture(scope="session")
+def judge_llm(request, tmp_path_factory):
+    judge = AnyLLMJudge("fake-model", "groq")
+    register_judge(request.config, judge, model="groq:fake-model")
+    shared_tmp = get_shared_tmp(request.config, tmp_path_factory)
+    fake_result = PreflightResult(
+        passed=True, correct=12, total=12, stopped_early=False, details=[],
+    )
+    with patch("pytest_llm_rubric.plugin.preflight", return_value=fake_result):
+        judge = _preflight_or_skip(judge, config=request.config, shared_tmp=shared_tmp)
+    def fake_complete(messages, max_output_tokens=256, response_format=None):
+        return "PASS"
+    judge.complete = fake_complete
+    return judge
+""")
+        pytester.makepyfile("""
+            def test_a(judge_llm):
+                assert judge_llm.judge("doc", "criterion A")
+
+            def test_b(judge_llm):
+                assert judge_llm.judge("doc", "criterion B")
+        """)
+        result = pytester.runpytest_subprocess("-v", "-n2")
+        result.assert_outcomes(passed=2)
+        result.stdout.fnmatch_lines(
+            ["*LLM Rubric*", "*Model: groq:fake-model*", "*2 passed, 0 failed*"]
         )
 
 
