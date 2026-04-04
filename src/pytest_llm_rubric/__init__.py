@@ -24,10 +24,22 @@ def __getattr__(name: str):  # noqa: ANN001
         }
         globals().update(_exports)
         return _exports[name]
-    if name in ("JudgeLLM", "AnyLLMJudge"):
-        from pytest_llm_rubric.plugin import AnyLLMJudge, JudgeLLM
+    if name in ("JudgeLLM", "AnyLLMJudge", "JudgmentRecord", "register_judge", "get_shared_tmp"):
+        from pytest_llm_rubric.plugin import (
+            AnyLLMJudge,
+            JudgeLLM,
+            JudgmentRecord,
+            get_shared_tmp,
+            register_judge,
+        )
 
-        _exports = {"JudgeLLM": JudgeLLM, "AnyLLMJudge": AnyLLMJudge}
+        _exports = {
+            "JudgeLLM": JudgeLLM,
+            "AnyLLMJudge": AnyLLMJudge,
+            "JudgmentRecord": JudgmentRecord,
+            "get_shared_tmp": get_shared_tmp,
+            "register_judge": register_judge,
+        }
         globals().update(_exports)
         return _exports[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -37,8 +49,11 @@ __all__ = [
     "AnyLLMJudge",
     "JUDGE_SYSTEM_PROMPT",
     "JudgeLLM",
+    "JudgmentRecord",
     "PreflightResult",
     "Verdict",
+    "get_shared_tmp",
     "parse_verdict",
     "preflight",
+    "register_judge",
 ]
