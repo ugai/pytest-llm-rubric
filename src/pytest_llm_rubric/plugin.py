@@ -22,6 +22,10 @@ from pytest_llm_rubric.utils import get_ollama_models, parse_ollama_host
 ENV_MODELS = "PYTEST_LLM_RUBRIC_MODELS"
 ENV_SKIP_PREFLIGHT = "PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT"
 
+_SOURCE_ENV = ENV_MODELS
+_SOURCE_INI = "llm_rubric_models (ini)"
+_SOURCE_AUTO = "auto (defaults)"
+
 
 @dataclass
 class JudgmentRecord:
@@ -312,7 +316,7 @@ def _resolve_models(config: pytest.Config) -> tuple[str, list[str]]:
         # Fall back to ini option when the env var is unset.
         ini: list[str] = config.getini("llm_rubric_models")
         if ini:
-            return "llm_rubric_models (ini)", ini
+            return _SOURCE_INI, ini
         pytest.fail(
             "PYTEST_LLM_RUBRIC_MODELS is not set. "
             "Set it to 'provider:model' (e.g. 'anthropic:claude-haiku-4-5'), "
@@ -321,10 +325,10 @@ def _resolve_models(config: pytest.Config) -> tuple[str, list[str]]:
         )
 
     if raw.lower() == "auto":
-        return "auto (defaults)", AUTO_MODELS
+        return _SOURCE_AUTO, AUTO_MODELS
 
     entries = [e.strip() for e in raw.split(",") if e.strip()]
-    return "PYTEST_LLM_RUBRIC_MODELS", entries
+    return _SOURCE_ENV, entries
 
 
 def _default_judge_llm(config: pytest.Config) -> JudgeLLM:
@@ -339,8 +343,8 @@ def _default_judge_llm(config: pytest.Config) -> JudgeLLM:
     """
     source, models = _resolve_models(config)
 
-    if len(models) == 1:
-        # Single model — fail immediately if unavailable.
+    if len(models) == 1 and source == _SOURCE_ENV:
+        # Single explicit model — fail immediately if unavailable.
         try:
             provider, model = _parse_model(models[0])
         except ValueError as exc:

@@ -150,24 +150,6 @@ class TestResolveModels:
         # Failure reasons should NOT include an ollama entry (not in the list).
         result.stdout.no_fnmatch_line("*ollama:*")
 
-    def test_ini_option_when_env_unset(self, pytester, monkeypatch):
-        """ini option is used when PYTEST_LLM_RUBRIC_MODELS env var is unset."""
-        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODELS", raising=False)
-        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        monkeypatch.setenv("PYTHONUTF8", "1")
-        pytester.makeini("""
-            [pytest]
-            llm_rubric_models =
-                anthropic:claude-haiku-4-5
-        """)
-        pytester.makeconftest("")
-        pytester.makepyfile("""
-            def test_uses_judge(judge_llm):
-                assert judge_llm is not None
-        """)
-        result = pytester.runpytest_subprocess("-v")
-        result.assert_outcomes(errors=1)
-        result.stdout.fnmatch_lines(["*anthropic*ANTHROPIC_API_KEY*"])
 
 
 # ---------------------------------------------------------------------------
@@ -511,6 +493,26 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(passed=1)
         result.stdout.fnmatch_lines(["*cloud provider*anthropic*third-party API*"])
         result.stdout.no_fnmatch_line("*LLM Rubric*")
+
+    def test_ini_single_cloud_model_warns(self, pytester, monkeypatch):
+        """A single cloud model from ini should still emit the cloud warning."""
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_MODELS", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", "1")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        pytester.makeini("""
+            [pytest]
+            llm_rubric_models =
+                anthropic:claude-haiku-4-5
+        """)
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v", "-W", "all")
+        result.assert_outcomes(passed=1)
+        result.stdout.fnmatch_lines(["*cloud provider*anthropic*third-party API*"])
 
     def test_preflight_timing_in_output(self, pytester, monkeypatch):
         """Preflight pass message should include elapsed time in terminal summary."""
