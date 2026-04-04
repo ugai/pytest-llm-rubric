@@ -59,8 +59,8 @@ def __getattr__(name: str):  # noqa: ANN001
 
 __all__ = [
     "AnyLLMJudge",
-    "JUDGE_SYSTEM_PROMPT",
     "GoldenTest",
+    "JUDGE_SYSTEM_PROMPT",
     "JudgeLLM",
     "JudgmentRecord",
     "PreflightDetail",
