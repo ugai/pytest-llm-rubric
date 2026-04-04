@@ -304,6 +304,8 @@ def _preflight_or_skip(judge: JudgeLLM, config: pytest.Config) -> JudgeLLM:
         failures = [d for d in result.details if not d["correct"]]
         tested = len(result.details)
         suffix = f" (stopped early after {tested}/{result.total})" if result.stopped_early else ""
+        summary = f"FAILED ({result.correct}/{result.total}){suffix} in {elapsed:.1f}s"
+        config.stash[_preflight_stash_key] = summary
         msg = (
             f"LLM backend failed preflight "
             f"({result.correct}/{result.total}){suffix} in {elapsed:.1f}s.\n"
@@ -327,10 +329,10 @@ def judge_llm(request: pytest.FixtureRequest) -> JudgeLLM:
     The backend is verified once per session via preflight golden tests.
     """
     judge = _default_judge_llm(request.config)
-    judge = _preflight_or_skip(judge, config=request.config)
     if isinstance(judge, AnyLLMJudge):
         request.config.stash[_model_stash_key] = f"{judge._provider}:{judge._model}"
         request.config.stash[_judgments_stash_key] = judge._judgments
+    judge = _preflight_or_skip(judge, config=request.config)
     return judge
 
 
