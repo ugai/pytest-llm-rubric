@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from pydantic import BaseModel
 
@@ -49,12 +49,22 @@ Respond with a single word: "PASS" or "FAIL".
 Your response must be exactly one word. Do not explain."""
 
 
+class PreflightDetail(TypedDict):
+    """A single preflight test result."""
+
+    criterion: str
+    expected: str
+    actual: str
+    correct: bool
+    raw_response: str
+
+
 @dataclass
 class PreflightResult:
     passed: bool
     total: int
     correct: int
-    details: list[dict]
+    details: list[PreflightDetail]
     stopped_early: bool = False
 
 
@@ -68,7 +78,7 @@ def preflight(llm: JudgeLLM, system_prompt: str | None = None) -> PreflightResul
         system_prompt: Custom system prompt. Defaults to JUDGE_SYSTEM_PROMPT.
     """
     prompt = system_prompt if system_prompt is not None else JUDGE_SYSTEM_PROMPT
-    details: list[dict] = []
+    details: list[PreflightDetail] = []
     correct = 0
     stopped_early = False
 

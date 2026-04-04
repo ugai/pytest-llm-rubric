@@ -4,6 +4,17 @@ Includes short-form pairs (basic semantic matching) and haystack pairs
 (rule buried in a long document vs. similar document without the rule).
 """
 
+from typing import TypedDict
+
+
+class GoldenTest(TypedDict):
+    """A single golden test case for preflight validation."""
+
+    document: str
+    criterion: str
+    expected: str  # "PASS" | "FAIL"
+
+
 # ---------------------------------------------------------------------------
 # Synthetic haystacks — resembles real SKILL.md structure
 # ---------------------------------------------------------------------------
@@ -186,7 +197,7 @@ Run the full test suite and linter before submitting.
 # Golden tests
 # ---------------------------------------------------------------------------
 
-GOLDEN_TESTS: list[dict] = [
+GOLDEN_TESTS: list[GoldenTest] = [
     # === Short-form: basic semantic matching ===
     # --- Expected PASS ---
     {
