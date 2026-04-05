@@ -17,6 +17,12 @@ uv run ty check src/                     # Type check (required — py.typed mar
 uv run python -m pytest_llm_rubric.find_local_model  # Find best local model
 ```
 
+## Development Workflow
+
+- Always run `uv run pre-commit install` after `uv sync`.
+  Pre-commit hooks automatically run ruff check / ruff format / ty check / pytest.
+- CI (GitHub Actions) runs the same checks, so PRs are blocked even without local hooks.
+
 ## Architecture
 
 This is a pytest plugin (`pytest11` entry point) that provides `judge_llm`, a session-scoped fixture for rubric-based LLM-as-judge testing.

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import pytest
+
 from pytest_llm_rubric.preflight import (
     GOLDEN_TESTS,
     JUDGE_SYSTEM_PROMPT,
@@ -45,6 +47,21 @@ class ReplayLLM:
         expected = GOLDEN_TESTS[self._index]["expected"]
         self._index += 1
         return self._transform(expected)
+
+
+class RaisingLLM:
+    """Raises ImportError on complete(), simulating a missing provider SDK."""
+
+    def __init__(self, exc: Exception):
+        self._exc = exc
+
+    def complete(
+        self,
+        messages: list[dict],
+        max_output_tokens: int = 256,
+        response_format: type | None = None,
+    ) -> str:
+        raise self._exc
 
 
 class TestPreflight:
@@ -149,6 +166,19 @@ class TestPreflight:
 
         result = preflight(ReplayLLM(transform=to_json))
         assert result.passed is True
+
+    def test_import_error_propagates(self):
+        """ImportError from a missing SDK is not swallowed into a verdict."""
+        llm = RaisingLLM(ImportError("anthropic required packages are not installed"))
+        with pytest.raises(ImportError, match="anthropic"):
+            preflight(llm)
+
+    def test_other_exceptions_become_error_verdict(self):
+        """Non-ImportError exceptions are still caught as ERROR verdicts."""
+        llm = RaisingLLM(RuntimeError("connection refused"))
+        result = preflight(llm)
+        assert result.passed is False
+        assert result.details[0]["actual"].startswith("ERROR:")
 
 
 class TestParseVerdict:

@@ -96,6 +96,8 @@ def preflight(llm: JudgeLLM, system_prompt: str | None = None) -> PreflightResul
                 messages, max_output_tokens=512, response_format=Verdict
             ).strip()
             verdict = parse_verdict(raw_response)
+        except ImportError:
+            raise  # SDK not installed — let caller handle with actionable message
         except Exception as e:
             verdict = f"ERROR: {e}"
 
