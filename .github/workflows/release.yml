@@ -8,6 +8,7 @@ permissions:
   contents: write
   id-token: write
 
+# All actions must be pinned to full-length commit SHA (GitHub repo setting enforced).
 jobs:
   release:
     runs-on: ubuntu-latest

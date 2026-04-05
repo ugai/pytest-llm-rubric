@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: [main]
 
+# All actions must be pinned to full-length commit SHA (GitHub repo setting enforced).
 jobs:
   lint:
     runs-on: ubuntu-latest
