@@ -150,6 +150,12 @@ class TestParseOllamaHostIPv6:
             == "http://[0001:002:003:0004::1]:56789/path"
         )
 
+    def test_ipv6_all_interfaces(self):
+        assert parse_ollama_host("[::]:11434") == "http://[::1]:11434"
+
+    def test_ipv6_all_interfaces_no_port(self):
+        assert parse_ollama_host("[::]") == "http://[::1]:11434"
+
 
 class TestParseOllamaHostLocalhostVariants:
     """Common localhost variations users might set."""
@@ -164,7 +170,13 @@ class TestParseOllamaHostLocalhostVariants:
         assert parse_ollama_host("http://localhost:11434") == "http://localhost:11434"
 
     def test_all_interfaces(self):
-        assert parse_ollama_host("0.0.0.0:11434") == "http://0.0.0.0:11434"
+        assert parse_ollama_host("0.0.0.0:11434") == "http://127.0.0.1:11434"
 
     def test_all_interfaces_no_port(self):
-        assert parse_ollama_host("0.0.0.0") == "http://0.0.0.0:11434"
+        assert parse_ollama_host("0.0.0.0") == "http://127.0.0.1:11434"
+
+    def test_all_interfaces_with_scheme(self):
+        assert parse_ollama_host("http://0.0.0.0:11434") == "http://127.0.0.1:11434"
+
+    def test_all_interfaces_https(self):
+        assert parse_ollama_host("https://0.0.0.0:56789") == "https://127.0.0.1:56789"
