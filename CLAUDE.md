@@ -15,6 +15,7 @@ uv run ruff check --fix src/ tests/      # Lint with auto-fix
 uv run ruff format src/ tests/           # Format
 uv run ty check src/                     # Type check (required — py.typed marker is present)
 uv run python -m pytest_llm_rubric.find_local_model  # Find best local model
+uv run git-cliff --output CHANGELOG.md   # Generate changelog (then review/edit before commit)
 ```
 
 ## Development Workflow
@@ -22,6 +23,20 @@ uv run python -m pytest_llm_rubric.find_local_model  # Find best local model
 - Always run `uv run pre-commit install` after `uv sync`.
   Pre-commit hooks automatically run ruff check / ruff format / ty check / pytest.
 - CI (GitHub Actions) runs the same checks, so PRs are blocked even without local hooks.
+
+## Release Workflow
+
+1. Bump `version` in `pyproject.toml`
+2. Run `uv run git-cliff --output CHANGELOG.md` to generate the changelog
+3. Review and polish the generated CHANGELOG.md (optionally with an LLM)
+4. Commit and tag:
+   ```bash
+   git add pyproject.toml CHANGELOG.md
+   git commit -m "release: vX.Y.Z"
+   git tag vX.Y.Z
+   git push && git push --tags
+   ```
+5. CI detects the tag and publishes to PyPI
 
 ## Architecture
 
