@@ -32,7 +32,11 @@ def parse_ollama_host(host: str | None) -> str:
     port = split.port or port
 
     try:
-        if isinstance(ipaddress.ip_address(host), ipaddress.IPv6Address):
+        addr = ipaddress.ip_address(host)
+        if addr.is_unspecified:
+            host = "127.0.0.1" if addr.version == 4 else "::1"
+            addr = ipaddress.ip_address(host)
+        if isinstance(addr, ipaddress.IPv6Address):
             host = f"[{host}]"
     except ValueError:
         ...
