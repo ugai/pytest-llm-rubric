@@ -9,9 +9,9 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "pytest>=8",
-    "any-llm-sdk[ollama]>=1.12",
-    "filelock>=3",
+    "pytest>=7.2",
+    "any-llm-sdk[ollama]>=1.12,<2",
+    "filelock>=3.25,<4",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -24,8 +24,8 @@ classifiers = [
 
 [project.optional-dependencies]
 ollama = []  # included in base; kept for backward compatibility
-openai = ["any-llm-sdk[openai]>=1.12"]
-anthropic = ["any-llm-sdk[anthropic]>=1.12"]
+openai = ["any-llm-sdk[openai]>=1.12,<2"]
+anthropic = ["any-llm-sdk[anthropic]>=1.12,<2"]
 
 [project.urls]
 Homepage = "https://github.com/ugai/pytest-llm-rubric"
@@ -36,8 +36,11 @@ Issues = "https://github.com/ugai/pytest-llm-rubric/issues"
 llm_rubric = "pytest_llm_rubric.plugin"
 
 [build-system]
-requires = ["uv_build>=0.10.10,<0.11.0"]
+requires = ["uv_build>=0.10.10,<1"]
 build-backend = "uv_build"
+
+[tool.uv]
+exclude-newer = "7 days"
 
 [tool.ruff]
 target-version = "py311"
@@ -57,7 +60,6 @@ markers = [
 dev = [
     "pre-commit>=4.5.1",
     "pytest-xdist>=3.8.0",
-    "pytest>=8",
     "pytest-codeblocks>=0.17.0",
     "ruff>=0.15.7",
     "ty>=0.0.24",
