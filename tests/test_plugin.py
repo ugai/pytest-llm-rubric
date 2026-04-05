@@ -119,6 +119,31 @@ class TestMakeJudge:
 
 
 # ---------------------------------------------------------------------------
+# _run_preflight_check tests
+# ---------------------------------------------------------------------------
+
+
+class TestRunPreflightCheck:
+    def test_import_error_returns_actionable_result(self):
+        """Missing provider SDK → result dict with import_error key."""
+        from pytest_llm_rubric.plugin import _run_preflight_check
+
+        class _ImportErrorLLM:
+            def complete(self, messages, max_output_tokens=256, response_format=None):
+                raise ImportError(
+                    "anthropic required packages are not installed. "
+                    "Please install them with `pip install any-llm-sdk[anthropic]`."
+                )
+
+        data = _run_preflight_check(_ImportErrorLLM())
+        assert data["passed"] is False
+        assert "import_error" in data
+        assert "anthropic" in data["import_error"]
+        assert "pip install" in data["import_error"]
+        assert data["summary"] == "FAILED (missing provider SDK)"
+
+
+# ---------------------------------------------------------------------------
 # _resolve_models tests
 # ---------------------------------------------------------------------------
 
@@ -149,7 +174,6 @@ class TestResolveModels:
         )
         # Failure reasons should NOT include an ollama entry (not in the list).
         result.stdout.no_fnmatch_line("*ollama:*")
-
 
 
 # ---------------------------------------------------------------------------

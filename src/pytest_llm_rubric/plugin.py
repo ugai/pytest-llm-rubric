@@ -385,7 +385,15 @@ def _default_judge_llm(config: pytest.Config) -> JudgeLLM:
 def _run_preflight_check(judge: JudgeLLM) -> dict[str, Any]:
     """Run preflight and return a result dict (serialisable to JSON)."""
     t0 = time.monotonic()
-    result = preflight(judge)
+    try:
+        result = preflight(judge)
+    except ImportError as exc:
+        return {
+            "passed": False,
+            "summary": "FAILED (missing provider SDK)",
+            "skip_msg": None,
+            "import_error": str(exc),
+        }
     elapsed = time.monotonic() - t0
     if not result.passed:
         failures = [d for d in result.details if not d["correct"]]
@@ -432,6 +440,11 @@ def _preflight_or_skip(
         data = _run_preflight_check(judge)
 
     config.stash[_preflight_stash_key] = data["summary"]
+    if data.get("import_error"):
+        pytest.fail(
+            f"Required provider SDK is not installed.\n  {data['import_error']}",
+            pytrace=False,
+        )
     if not data["passed"]:
         pytest.skip(data["skip_msg"])
     return judge
