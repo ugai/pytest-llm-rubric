@@ -45,6 +45,7 @@ def test_semantic_check(judge_llm):
     assert sum(results) / len(results) >= 0.5
 ```
 
+<!--pytest.mark.skip-->
 ```bash
 # output
 $ pytest test_example.py -v
