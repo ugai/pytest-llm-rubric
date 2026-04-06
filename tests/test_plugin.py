@@ -988,7 +988,7 @@ def judge_llm(request, tmp_path_factory):
 
 @pytest.mark.integration
 class TestIntegration:
-    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # any-llm-sdk internal
     def test_ollama_complete(self):
         result = _make_judge("ollama", "")
         if isinstance(result, str):
