@@ -5,100 +5,108 @@
 
 > **Experimental** — this plugin is in early development. APIs may change without notice.
 
-Minimal pytest plugin for LLM-as-a-Judge — simple semantic PASS/FAIL checks against text or documents.
+Pytest plugin for LLM-as-a-Judge semantic PASS/FAIL checks.  
+Just a thin layer between pytest and your LLM stack.
 
-## Why pytest?
+## Use Cases
 
-Your CI already runs pytest. Semantic text checks shouldn't need a separate framework. Just another test file.
+Catch semantic regressions in:
 
-## Use When
-
-- Wording varies but meaning must be preserved
-- Exact string assertions are too brittle
-- Tests need binary semantic judgments: PASS or FAIL
-
-e.g.
-
-- Agent skill regression — instruction docs still contain required rules after edits
-- Prompt regression — LLM output quality hasn't degraded after prompt changes
-- Doc generation CI — auto-generated docs include all required sections
-- Translation fidelity — specific meanings are preserved across languages
+- Agent skills: instruction docs still contain rules after edits
+- Prompts: LLM output quality hasn't degraded after changes
+- Generated docs: auto-generated content includes all required sections
+- Translations: specific meanings are preserved across languages
 
 Not a general essay grader or multi-dimensional scoring system.
 
 ## Quick Start
 
-### Prerequisites
+Install and configure with a local Ollama model:
 
 <!--pytest.mark.skip-->
 ```bash
-pip install pytest-llm-rubric          # or: uv add --dev pytest-llm-rubric
-ollama serve                           # start Ollama (if not already running)
-ollama pull gpt-oss:20b               # or any model you want to use
+pip install pytest-llm-rubric
+ollama pull gpt-oss:20b
 export PYTEST_LLM_RUBRIC_MODELS="ollama:gpt-oss:20b"
 ```
 
-### Minimal Test
+See [Model selection](#model-selection) for other backends.
 
 ```python
-def test_mentions_deadline(judge_llm):
-    # In practice, text is usually much longer —
-    # policy docs, generated reports, LLM outputs, etc.
-    text = "The report is due by March 31st."
-    assert judge_llm.judge(text, "The delivery deadline is mentioned.")
+# test code
+def test_semantic_check(judge_llm):
+    text = "The quick brown fox jumps over the lazy dog."
+    assert judge_llm.judge(text, "Two animals appear in the text.")
+
+    results = [
+        judge_llm.judge(text, "A fox leaps over a dog."),
+        judge_llm.judge(text, "The dog is beneath the fox."),
+    ]
+    assert sum(results) / len(results) >= 0.5
 ```
 
-## Execution Flow
+<!--pytest.mark.skip-->
+```bash
+# output
+$ pytest test_example.py -v
+================================= LLM Rubric ==================================
+Model: ollama:gpt-oss:20b  Preflight: preflight passed (12/12) in 231.8s
+3 passed, 0 failed
+```
 
-1. **Discover** — resolve the backend from `PYTEST_LLM_RUBRIC_MODELS`
-2. **Preflight** — verify the backend can reliably judge PASS/FAIL before exposing it as `judge_llm` (skippable)
-3. **Provide, skip, or fail** — expose the `judge_llm` session fixture on success. If the backend is unavailable, tests **fail**. If preflight fails, tests are **skipped**
+## How It Works
+
+1. **Discover** - resolve the LLM backend from `PYTEST_LLM_RUBRIC_MODELS`
+2. **Preflight** - run a sanity-check to verify the backend can reliably judge PASS/FAIL ([skippable](#skipping-preflight))
+3. **Provide** - pass the `judge_llm` fixture to your tests
+    - If the backend is unavailable, tests **fail**
+    - If preflight fails, tests are **skipped**
 
 ## Example: Policy Document Checks
 
-Verify that each policy document semantically expresses required rules.
+Verify that each policy document expresses required rules.
 
 ```python
 import pytest
 from pathlib import Path
 from pytest_llm_rubric import JudgeLLM
 
-POLICY_DOCS = sorted(Path("docs/policies").rglob("*.md"))
+POLICY_DOC = Path("docs/policies/data-security.md")
 REQUIRED_RULES = [
     "Personal data must be encrypted at rest",
     "Access logs are retained for at least 90 days",
     "Third-party integrations require security review",
 ]
 
-# @pytest.mark.flaky(reruns=2)  # requires `pytest-rerunfailures` (recommended)
-@pytest.mark.parametrize("doc", POLICY_DOCS)
+@pytest.mark.flaky(reruns=2)  # requires `pytest-rerunfailures`
 @pytest.mark.parametrize("rule", REQUIRED_RULES)
-def test_policy_expresses_rule(judge_llm: JudgeLLM, doc, rule):
-    assert judge_llm.judge(doc.read_text(), rule), f"{doc} is missing rule: {rule}"
+def test_data_security_policy(judge_llm: JudgeLLM, rule):
+    assert judge_llm.judge(POLICY_DOC.read_text(), rule)
 ```
 
 ## Configuration
 
 ### Model selection
 
-Set `PYTEST_LLM_RUBRIC_MODELS` to a `provider:model` string (or comma-separated list):
+Set `PYTEST_LLM_RUBRIC_MODELS` to one or more `provider:model` values:
 
-| `PYTEST_LLM_RUBRIC_MODELS` | Example | Notes |
-|---|---|---|
-| `ollama:<model>` | `ollama:gpt-oss:20b` | Local Ollama instance |
-| `anthropic:<model>` | `anthropic:claude-haiku-4-5` | Requires `ANTHROPIC_API_KEY` |
-| `openai:<model>` | `openai:gpt-5.4-nano` | Requires `OPENAI_API_KEY` |
-| `<provider>:<model>` | `groq:llama-3.3-70b` | Requires any-llm extra + provider SDK |
-| comma-separated list | `ollama:gpt-oss:20b,anthropic:claude-haiku-4-5` | Try each in order |
-| `auto` | — | Try the default model list |
-| (unset) | — | Error, unless `llm_rubric_models` is configured in ini |
+| Value | Description |
+| --- | --- |
+| `ollama:gpt-oss:20b` | Ollama |
+| `anthropic:claude-haiku-4-5` | Requires `ANTHROPIC_API_KEY` [*](#additional-sdk) |
+| `openai:gpt-5.4-nano` | Requires `OPENAI_API_KEY` [*](#additional-sdk) |
+| `groq:llama-3.3-70b` | Requires `GROQ_API_KEY` [*](#additional-sdk) |
+| `ollama:gpt-oss:20b,anthropic:claude-haiku-4-5` | Comma-separated: use first available |
+| `auto` | Try the [default model list](src/pytest_llm_rubric/defaults.py) |
+| (unset) | Error, unless `llm_rubric_models` is configured in ini |
 
-The `provider:model` syntax follows the [any-llm-sdk](https://github.com/mozilla-ai/any-llm) convention (colon separator). Built-in providers are `ollama`, `anthropic`, and `openai`. Additional providers (e.g. `groq`, `mistral`) are recognised when any-llm is installed.
+#### Additional SDK
 
-CI example:
+Cloud providers need their SDK via [any-llm-sdk](https://github.com/mozilla-ai/any-llm): `pip install any-llm-sdk[anthropic]` (or `[openai]`, `[groq]`). Ollama is included by default.
 
 <!--pytest.mark.skip-->
 ```yaml
+# GitHub Actions workflow
 env:
   PYTEST_LLM_RUBRIC_MODELS: anthropic:claude-haiku-4-5
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -106,17 +114,14 @@ env:
 
 ### Fallback list
 
-When multiple models are specified (comma-separated or `auto`), the plugin tries each in order until one is reachable. The model list is resolved as:
+Model resolution order: env var `PYTEST_LLM_RUBRIC_MODELS` > ini option `llm_rubric_models`.
 
-1. **Env var** `PYTEST_LLM_RUBRIC_MODELS` — comma-separated `provider:model` strings, or `auto`
-2. **pytest ini option** `llm_rubric_models` — in `pyproject.toml` or `pytest.ini` (used when env var is unset)
-3. **`auto`** — uses the package default list in [`defaults.py`](src/pytest_llm_rubric/defaults.py)
-
-> **Note:** The default list includes cloud providers (Anthropic, OpenAI) as fallbacks after Ollama. If their API keys are set, `auto` may incur API costs. To avoid this, list only providers you intend to use.
+> [!IMPORTANT]
+> The default list includes cloud providers (Anthropic, OpenAI). If their API keys are set, `auto` may incur API costs. To avoid this, list only providers you intend to use.
 
 <!--pytest.mark.skip-->
 ```toml
-# pyproject.toml — linelist format (one entry per line)
+# pyproject.toml
 [tool.pytest.ini_options]
 llm_rubric_models = [
     "ollama:qwen3.5:9b",
@@ -124,57 +129,58 @@ llm_rubric_models = [
 ]
 ```
 
-Or equivalently in `pytest.ini`:
+### Markers
+
+Tests that use the `judge_llm` fixture automatically receive the `llm_rubric` marker, so you can run or skip them selectively:
 
 <!--pytest.mark.skip-->
-```ini
-[pytest]
-llm_rubric_models =
-    ollama:qwen3.5:9b
-    anthropic:claude-haiku-4-5
+```bash
+pytest -m llm_rubric        # run only LLM-judged tests
+pytest -m "not llm_rubric"  # skip LLM-judged tests
 ```
-
-> **Pro tip:** Models with verbose reasoning traces (e.g. `qwen3.5` in thinking mode) can be much slower on PASS/FAIL tasks. `gpt-oss` is a good default — fast despite using medium-level reasoning.
 
 ### Skipping preflight
 
 Set `PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1` to bypass the built-in golden tests.
 
-### pytest-xdist (experimental)
+### Find best local model
 
-The plugin is designed to work with [pytest-xdist](https://pypi.org/project/pytest-xdist/) parallel execution. Preflight runs once across workers via file lock, and each worker's judgment results are written to a shared temp directory for aggregation in the terminal summary. This has not been extensively tested yet — please report issues if you encounter problems.
-
-<!--pytest.mark.skip-->
-```bash
-pip install pytest-xdist
-pytest -n auto -m llm_rubric
-```
-
-## Markers
-
-Tests that use the `judge_llm` fixture automatically receive the `llm_rubric` marker.
+A tiny CLI utility that runs preflight against all local Ollama models and recommends the smallest one that passes.
 
 <!--pytest.mark.skip-->
 ```bash
-pytest -m "not llm_rubric"  # run everything except LLM-judged tests
-pytest -m llm_rubric        # run only LLM-judged tests
+$ uv run python -m pytest_llm_rubric.find_local_model --base-url http://localhost:11434 gemma4:e2b gemma4:e4b gemma4:26b
+Found 3 model(s) in Ollama. Running preflight...
+
+  gemma4:e2b                     ( 6.7GB) ... FAIL (0/12 stopped at 1/12)
+  gemma4:e4b                     ( 8.9GB) ... FAIL (0/12 stopped at 1/12)
+  gemma4:26b                     (16.8GB) ... PASS (12/12)
+Recommended: gemma4:26b (smallest passing model)
 ```
 
-## Flaky test mitigation
+These tools can also help you find models that fit your hardware:
 
-LLM-based tests are inherently non-deterministic — the same input may produce different judgments across runs. This is a feature, not a bug: deterministic settings (`temperature=0`) would undermine the fuzzy semantic matching that makes this approach valuable.
+- [canirun.ai](https://www.canirun.ai/) - browser-based, shows which models fit your hardware
+- [llmfit](https://github.com/AlexsJones/llmfit) - CLI tool that scores models by fit, speed, and quality
 
-Preflight screens out models that are too unreliable, but borderline cases may still produce occasional flaky results. Rather than fighting non-determinism, use pytest's existing ecosystem:
+## Advanced Usage
 
-<!--pytest.mark.skip-->
-```bash
-pip install pytest-rerunfailures
-pytest --reruns 2 -m llm_rubric  # rerun failed LLM tests up to 2 times
+### `complete()`
+
+`complete()` gives you full control over the LLM interaction: you provide the messages and get back the raw response. Use it when `judge()` is too opinionated.
+
+```python
+from pytest_llm_rubric import parse_verdict
+
+def test_custom_prompt(judge_llm):
+    response = judge_llm.complete([
+        {"role": "system", "content": "You are a compliance auditor. Reply PASS or FAIL."},
+        {"role": "user", "content": f"DOCUMENT:\n{POLICY_DOC.read_text()}\n\nRULE:\nPersonal data must be encrypted at rest"},
+    ])
+    passed = parse_verdict(response) == "PASS"
+    judge_llm.record(criterion="encryption at rest", passed=passed)
+    assert passed
 ```
-
-See the [pytest documentation on flaky tests](https://docs.pytest.org/en/stable/explanation/flaky.html) for more strategies.
-
-## Customization
 
 ### Custom backend
 
@@ -188,11 +194,10 @@ from pytest_llm_rubric import AnyLLMJudge, register_judge
 
 class MyBackend(AnyLLMJudge):
     def complete(self, messages, max_output_tokens=256, response_format=None):
-        # Call your internal LLM gateway
         resp = requests.post("https://internal-llm.corp/v1/chat", json={"messages": messages})
         return resp.json()["content"]
 
-# Override the fixture directly — no provider:model env var needed.
+# Override the fixture directly
 @pytest.fixture(scope="session")
 def judge_llm(request):
     judge = MyBackend("my-model", "internal")
@@ -200,79 +205,48 @@ def judge_llm(request):
     return judge
 ```
 
-Extending `AnyLLMJudge` gives you `judge()`, `record()`, and the terminal summary for free. Call `register_judge()` so the terminal summary can report the model name and judgment counts. When you override the `judge_llm` fixture directly, `PYTEST_LLM_RUBRIC_MODELS` is not used. If you prefer a standalone class, implement `complete()`, `judge()`, and `record()` (see the `JudgeLLM` protocol).
+Extend `AnyLLMJudge` and override `complete()`. Call `register_judge()` in your fixture so the terminal summary picks up the results.
 
-> **Aside — AI coding assistant CLIs as backends:** Subscription users who don't have an API key can use CLI headless modes as backends. Both [Claude Code](https://claude.com/product/claude-code/) (`claude -p`) and [GitHub Copilot](https://github.com/features/copilot/cli/) (`copilot -p`) support this:
->
-> <!--pytest.mark.skip-->
-> ```python
-> import re, subprocess
-> from pytest_llm_rubric import AnyLLMJudge
->
-> class ClaudeCLIBackend(AnyLLMJudge):
->     def complete(self, messages, max_output_tokens=256, response_format=None):
->         prompt = messages[-1]["content"]
->         result = subprocess.run(
->             ["claude", "-p", prompt],  # or ["copilot", "-p", prompt]
->             capture_output=True, timeout=300,
->         )
->         return result.stdout.decode("utf-8")
-> ```
->
-> These are slower than direct API calls (CLI startup overhead per invocation) and subject to each subscription's fair-use limits, but they work without any additional billing setup.
+### AI coding assistant CLIs as backends
 
-### Two APIs: `judge()` and `complete()`
-
-The plugin provides two complementary ways to evaluate documents:
-
-| | `judge()` | `complete()` |
-|---|---|---|
-| **Use when** | Standard "does X satisfy Y" checks | Custom system prompts, multi-step verification, non-standard criteria |
-| **System prompt** | Built-in (optimized for PASS/FAIL) | You provide your own |
-| **Summary tracking** | Automatic | Call `record()` to include |
-
-Most tests start with `judge()`. Reach for `complete()` when you need a different system prompt or multi-step verification (e.g., checking a document against a rule, then verifying the rule's source).
-
-```python
-from pytest_llm_rubric import parse_verdict
-
-def test_custom_prompt(judge_llm):
-    response = judge_llm.complete([
-        {"role": "system", "content": "Your custom system prompt. Reply PASS or FAIL."},
-        {"role": "user", "content": f"DOCUMENT:\n{text}\n\nCRITERION:\n{criterion}"},
-    ])
-    verdict = parse_verdict(response)
-    passed = verdict == "PASS"
-    judge_llm.record(criterion="my criterion", passed=passed)
-    assert passed
-```
-
-### Custom system prompt
-
-Tweak the preflight system prompt if your model needs specific instructions to pass preflight.
+AI coding assistant CLIs like [Claude Code](https://claude.com/product/claude-code/) or [GitHub Copilot](https://github.com/features/copilot/cli/) can also be used as backends without an API key:
 
 <!--pytest.mark.skip-->
 ```python
-from pytest_llm_rubric.preflight import preflight, JUDGE_SYSTEM_PROMPT
+import subprocess
+from pytest_llm_rubric import AnyLLMJudge
 
-result = preflight(llm, system_prompt="Your custom prompt here.")
+class ClaudeCLIBackend(AnyLLMJudge):
+    def complete(self, messages, max_output_tokens=256, response_format=None):
+        prompt = messages[-1]["content"]
+        result = subprocess.run(
+            ["claude", "-p", prompt],  # or ["copilot", "-p", prompt]
+            capture_output=True, timeout=300,
+        )
+        return result.stdout.decode("utf-8")
 ```
 
-The default `JUDGE_SYSTEM_PROMPT` is used when `system_prompt` is omitted.
+### Parallel execution (pytest-xdist)
 
-## Find Best Local Model
+Works with [pytest-xdist](https://pypi.org/project/pytest-xdist/). Preflight runs once across workers. Not extensively tested yet, please report issues.
 
 <!--pytest.mark.skip-->
 ```bash
-uv run python -m pytest_llm_rubric.find_local_model
+pip install pytest-xdist
+pytest -n auto -m llm_rubric
 ```
 
-Runs preflight against all local Ollama models and recommends the smallest one that passes.
+### Flaky tests
 
-Not sure which models to pull? These tools help you find models that fit your hardware:
+LLM-based tests are inherently non-deterministic. Preflight screens out unreliable models, but borderline cases may still flake. Use [pytest-rerunfailures](https://pypi.org/project/pytest-rerunfailures/) to retry:
 
-- [canirun.ai](https://www.canirun.ai/) — browser-based hardware detection, shows which models and quantization levels your machine can handle
-- [llmfit](https://github.com/AlexsJones/llmfit) — CLI tool that scores models by fit, speed, and quality for your specific GPU/RAM
+<!--pytest.mark.skip-->
+```bash
+pip install pytest-rerunfailures
+pytest --reruns 2 -m llm_rubric  # rerun failed LLM tests up to 2 times
+```
+
+Deterministic settings (`temperature=0`) would undermine the fuzzy semantic matching that makes this approach valuable. See the [pytest documentation on flaky tests](https://docs.pytest.org/en/stable/explanation/flaky.html) for more strategies.
 
 ## Development
 
@@ -280,7 +254,7 @@ Not sure which models to pull? These tools help you find models that fit your ha
 ```bash
 git clone https://github.com/ugai/pytest-llm-rubric.git
 cd pytest-llm-rubric
-uv sync --extra ollama
+uv sync
 uv run pre-commit install           # ruff + ty on every commit
 uv run pytest -m "not integration"  # no LLM calls, runs offline
 uv run ruff check src/ tests/
@@ -290,10 +264,10 @@ uv run ty check src/
 
 ## References
 
-This plugin's design — decomposing evaluation into multiple binary PASS/FAIL criteria instead of multi-level scoring — aligns with Anthropic's recommended practices:
+This plugin's design — binary PASS/FAIL criteria, not multi-level scoring — aligns with Anthropic's recommended practices:
 
-- **[Define success criteria and build evaluations](https://docs.anthropic.com/en/docs/test-and-evaluate/develop-tests)** — LLM-based grading section recommends binary classification (`"correct"` / `"incorrect"`) with clear rubrics over qualitative scales.
-- **[Skill authoring best practices](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills/best-practices)** — Evaluation-driven development section structures `expected_behavior` as an array of individually verifiable statements, not a single aggregate score.
+- [Define success criteria and build evaluations](https://docs.anthropic.com/en/docs/test-and-evaluate/develop-tests) — binary classification with clear rubrics over qualitative scales
+- [Skill authoring best practices](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills/best-practices) — `expected_behavior` as individually verifiable statements, not a single aggregate score
 
 ## License
 

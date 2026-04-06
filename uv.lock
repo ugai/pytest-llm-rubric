@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11"
 
 [options]
-exclude-newer = "2026-03-29T13:12:21.3614268Z"
+exclude-newer = "2026-03-30T15:26:29.2351863Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -586,16 +586,9 @@ dependencies = [
     { name = "pytest" },
 ]
 
-[package.optional-dependencies]
-anthropic = [
-    { name = "any-llm-sdk", extra = ["anthropic"] },
-]
-openai = [
-    { name = "any-llm-sdk" },
-]
-
 [package.dev-dependencies]
 dev = [
+    { name = "any-llm-sdk", extra = ["anthropic"] },
     { name = "git-cliff" },
     { name = "pre-commit" },
     { name = "pytest-codeblocks" },
@@ -606,16 +599,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "any-llm-sdk", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=1.12,<2" },
     { name = "any-llm-sdk", extras = ["ollama"], specifier = ">=1.12,<2" },
-    { name = "any-llm-sdk", extras = ["openai"], marker = "extra == 'openai'", specifier = ">=1.12,<2" },
     { name = "filelock", specifier = ">=3.25,<4" },
     { name = "pytest", specifier = ">=7.2" },
 ]
-provides-extras = ["ollama", "openai", "anthropic"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "any-llm-sdk", extras = ["anthropic"], specifier = ">=1.12.1" },
     { name = "git-cliff", specifier = ">=2.9.0" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pytest-codeblocks", specifier = ">=0.17.0" },

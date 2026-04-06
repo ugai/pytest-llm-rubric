@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-uv sync --extra ollama                   # Install dependencies (editable mode, with Ollama)
+uv sync                                  # Install dependencies (editable mode)
 uv run pre-commit install                # Install pre-commit hooks (ruff + ty)
 uv run pytest -m "not integration"       # Run tests (no LLM calls)
 uv run pytest -m integration             # Run integration tests (requires Ollama / API keys)
