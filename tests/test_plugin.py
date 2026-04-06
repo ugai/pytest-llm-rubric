@@ -252,7 +252,8 @@ class TestAnyLLMJudge:
 
         with patch("any_llm.completion", side_effect=[empty, ok]) as mock_comp:
             judge = AnyLLMJudge("m", "ollama", api_base="http://localhost:11434")
-            result = judge.complete([{"role": "user", "content": "hi"}])
+            with pytest.warns(UserWarning, match="Empty response"):
+                result = judge.complete([{"role": "user", "content": "hi"}])
 
         assert result == "PASS"
         assert mock_comp.call_count == 2
@@ -263,7 +264,8 @@ class TestAnyLLMJudge:
 
         with patch("any_llm.completion", return_value=empty) as mock_comp:
             judge = AnyLLMJudge("m", "ollama", api_base="http://localhost:11434")
-            result = judge.complete([{"role": "user", "content": "hi"}])
+            with pytest.warns(UserWarning, match="Empty response"):
+                result = judge.complete([{"role": "user", "content": "hi"}])
 
         assert result == ""
         assert mock_comp.call_count == 1 + AnyLLMJudge._MAX_EMPTY_RETRIES
@@ -986,6 +988,7 @@ def judge_llm(request, tmp_path_factory):
 
 @pytest.mark.integration
 class TestIntegration:
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
     def test_ollama_complete(self):
         result = _make_judge("ollama", "")
         if isinstance(result, str):
