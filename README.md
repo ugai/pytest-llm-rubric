@@ -100,9 +100,7 @@ Set `PYTEST_LLM_RUBRIC_MODELS` to one or more `provider:model` values:
 | `auto` | Try the [default model list](src/pytest_llm_rubric/defaults.py) |
 | (unset) | Error, unless `llm_rubric_models` is configured in ini |
 
-#### Additional SDK
-
-Cloud providers need their SDK via [any-llm-sdk](https://github.com/mozilla-ai/any-llm): `pip install any-llm-sdk[anthropic]` (or `[openai]`, `[groq]`). Ollama is included by default.
+<a id="additional-sdk"></a>Cloud providers (*) need their SDK via [any-llm-sdk](https://github.com/mozilla-ai/any-llm): `pip install any-llm-sdk[anthropic]` (or `[openai]`, `[groq]`). Ollama is included by default.
 
 <!--pytest.mark.skip-->
 ```yaml
@@ -129,6 +127,17 @@ llm_rubric_models = [
 ]
 ```
 
+### Skipping preflight
+
+Set `PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1` to bypass the built-in golden tests, or add an ini option:
+
+```toml
+[tool.pytest.ini_options]
+llm_rubric_skip_preflight = true
+```
+
+The env var takes precedence over the ini option.
+
 ### Markers
 
 Tests that use the `judge_llm` fixture automatically receive the `llm_rubric` marker, so you can run or skip them selectively:
@@ -138,10 +147,6 @@ Tests that use the `judge_llm` fixture automatically receive the `llm_rubric` ma
 pytest -m llm_rubric        # run only LLM-judged tests
 pytest -m "not llm_rubric"  # skip LLM-judged tests
 ```
-
-### Skipping preflight
-
-Set `PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=1` to bypass the built-in golden tests.
 
 ### Find best local model
 

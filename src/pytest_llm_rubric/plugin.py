@@ -425,8 +425,14 @@ def _preflight_or_skip(
     When *shared_tmp* is provided, a ``FileLock`` ensures preflight runs only
     once across pytest-xdist workers.
     """
-    if os.environ.get(ENV_SKIP_PREFLIGHT, "").lower() in ("1", "true", "yes"):
+    env_val = os.environ.get(ENV_SKIP_PREFLIGHT, "").lower()
+    if env_val in ("1", "true", "yes"):
         return judge
+    # Fall back to ini option when env var is unset/empty.
+    if not env_val:
+        ini_val: str = config.getini("llm_rubric_skip_preflight")
+        if ini_val.lower() in ("1", "true", "yes"):
+            return judge
 
     if shared_tmp is not None:
         preflight_file = shared_tmp / "llm_rubric_preflight.json"
@@ -486,6 +492,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=[],
         help="List of provider:model strings to try in order. "
         "Used when PYTEST_LLM_RUBRIC_MODELS is unset.",
+    )
+    parser.addini(
+        "llm_rubric_skip_preflight",
+        type="string",
+        default="",
+        help="Skip preflight golden tests (true/1/yes). "
+        "Used when PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT is unset.",
     )
 
 
