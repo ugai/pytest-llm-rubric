@@ -2,11 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [0.4.0](https://github.com/ugai/pytest-llm-rubric/releases/tag/v0.4.0) — 2026-04-07
 
 ### Bug Fixes
 
-- Remove unsupported semver cooldown for github-actions ecosystem(cd54ca5)
 - Surface any-llm ImportError instead of silent preflight failure (#52)(48c19d8)
 - Rewrite 0.0.0.0 to localhost in parse_ollama_host (#48) (#51)(c2d59c0)
 - Correct `__all__` alphabetical sort order(4c28654)
@@ -19,17 +18,12 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- Add llm_rubric_skip_preflight ini option (#60)(ac15f4e)
 - Add register_judge helper and pytest-xdist compatibility (#42)(9dd1e6e)
-
-### Miscellaneous
-
-- Add SHA pinning policy comment to workflow files(2e75ee6)
-- Pin GitHub Actions to SHA and add dependabot cooldown(9e047ff)
-- Relax dependency bounds and add security tooling(1c91d15)
 
 ### Refactor
 
-- Unify PYTEST_LLM_RUBRIC_MODEL + AUTO_MODELS into PYTEST_LLM_RUBRIC_MODELS (#49)(a542a69)
+- Unify PYTEST_LLM_RUBRIC_MODEL + AUTO_MODELS into PYTEST_LLM_RUBRIC_MODELS (#49) (**BREAKING**)(a542a69)
 - Use TypedDict for golden test data and preflight details(a30ac63)
 
 ## [0.3.0](https://github.com/ugai/pytest-llm-rubric/releases/tag/v0.3.0) — 2026-03-28
