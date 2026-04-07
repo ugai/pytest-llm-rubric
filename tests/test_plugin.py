@@ -540,6 +540,49 @@ class TestJudgeLLMFixture:
         result.assert_outcomes(passed=1)
         result.stdout.fnmatch_lines(["*cloud provider*anthropic*third-party API*"])
 
+    def test_ini_skip_preflight(self, pytester, monkeypatch):
+        """llm_rubric_skip_preflight ini option should skip preflight."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:llama-3.3-70b")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        monkeypatch.delenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", raising=False)
+        pytester.makeini("""
+            [pytest]
+            llm_rubric_skip_preflight = true
+        """)
+        pytester.makeconftest("")
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(passed=1)
+        result.stdout.no_fnmatch_line("*Preflight:*")
+
+    def test_env_skip_preflight_overrides_ini(self, pytester, monkeypatch):
+        """Env var PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT=0 should NOT skip even if ini says true."""
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:llama-3.3-70b")
+        monkeypatch.setenv("PYTHONUTF8", "1")
+        monkeypatch.setenv("PYTEST_LLM_RUBRIC_SKIP_PREFLIGHT", "0")
+        pytester.makeini("""
+            [pytest]
+            llm_rubric_skip_preflight = true
+        """)
+        pytester.makeconftest(
+            _preflight_conftest(
+                passed=True,
+                correct=12,
+                total=12,
+                stopped_early=False,
+            )
+        )
+        pytester.makepyfile("""
+            def test_uses_judge(judge_llm):
+                assert judge_llm is not None
+        """)
+        result = pytester.runpytest_subprocess("-v")
+        result.assert_outcomes(passed=1)
+        result.stdout.fnmatch_lines(["*preflight passed*"])
+
     def test_preflight_timing_in_output(self, pytester, monkeypatch):
         """Preflight pass message should include elapsed time in terminal summary."""
         monkeypatch.setenv("PYTEST_LLM_RUBRIC_MODELS", "groq:llama-3.3-70b")
