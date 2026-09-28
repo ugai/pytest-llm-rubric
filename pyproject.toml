@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pytest>=7.2",
     "any-llm-sdk[ollama]>=1.12,<2",
-    "filelock>=3.25,<4",
+    "filelock>=3.25,<5",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
